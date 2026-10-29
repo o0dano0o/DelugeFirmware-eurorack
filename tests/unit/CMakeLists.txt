@@ -61,6 +61,8 @@ file(GLOB_RECURSE deluge_SOURCES
         ../../src/deluge/gui/ui/keyboard/chords.cpp
         # For clock output scheduler tests
         ../../src/deluge/playback/clock_output_scheduler.cpp
+        # For chaos engine tests
+        ../../src/deluge/processing/engines/chaos_engine.cpp
 )
 
 add_executable(UnitTests
@@ -76,6 +78,7 @@ add_executable(UnitTests
         time_tests.cpp
         clock_output_scheduler_tests.cpp
         notes_state_tests.cpp
+        chaos_engine_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)
