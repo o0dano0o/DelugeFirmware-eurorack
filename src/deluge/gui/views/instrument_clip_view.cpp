@@ -507,18 +507,6 @@ ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bo
 		}
 	}
 
-	// SHIFT + Kit button, while in a Kit clip: open the Eurorack gate view showing all four gate tracks at once
-	else if (b == KIT && Buttons::isShiftButtonPressed() && currentUIMode == UI_MODE_NONE
-	         && getCurrentOutputType() == OutputType::KIT) {
-		if (on) {
-			if (inCardRoutine) {
-				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
-			}
-
-			changeRootUI(&euclideanView);
-		}
-	}
-
 	// Kit button. Unlike the other instrument-type buttons, whose code is in InstrumentClipMinder, this one is only
 	// allowed in the InstrumentClipView
 	else if (b == KIT && currentUIMode == UI_MODE_NONE) {

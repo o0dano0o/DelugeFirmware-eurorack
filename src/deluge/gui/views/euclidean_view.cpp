@@ -421,8 +421,8 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		display->cancelPopup();
 	}
 
-	// BACK, or SHIFT+KIT again, returns to the normal Kit clip view
-	if (b == BACK || (b == KIT && Buttons::isShiftButtonPressed())) {
+	// BACK, or SHIFT+CV again, returns to the normal Kit clip view
+	if (b == BACK || (b == CV && Buttons::isShiftButtonPressed())) {
 		if (on) {
 			if (inCardRoutine) {
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
