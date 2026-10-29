@@ -731,6 +731,10 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 
 	RGB colour = colourForChannel(channel);
 	RGB empty = colour.dim(3);
+	// Step 1, where the pattern starts, is tinted a different shade so rotation is easy to read. Its empty state is a
+	// touch brighter than other empty steps so the start point shows even when there's no hit on it.
+	RGB startColour = RGB::fromHue(channel * 48 + 24);
+	RGB startEmpty = startColour.dim(2);
 	int32_t playheadStep = getPlayheadStep(clip, channel);
 
 	for (int32_t step = 0; step < numSteps; step++) {
@@ -741,6 +745,9 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 
 		bool isHit = hits & (1u << step);
 		RGB pad = isHit ? colour : empty;
+		if (step == 0) {
+			pad = isHit ? startColour : startEmpty;
+		}
 		if (step == playheadStep) {
 			pad = isHit ? colours::white : RGB::monochrome(60);
 		}
