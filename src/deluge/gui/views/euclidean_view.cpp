@@ -696,7 +696,8 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 			display->popupTextTemporary(enable ? "Chaos CV on" : "Chaos CV off");
 		}
 		else {
-			display->displayPopup(enable ? "CH ON" : "CH OFF");
+			// too long for four digits, so scroll it
+			display->setScrollingText(enable ? "Chaos CV on" : "Chaos CV off");
 		}
 		return ActionResult::DEALT_WITH;
 	}
