@@ -54,9 +54,9 @@ namespace {
 
 // ---- Control mapping -------------------------------------------------------------------------------------------
 // Which gate track (0-3, i.e. gate outputs 1-4) each physical encoder edits the length of. Change these to remap.
-constexpr int32_t kChannelForModEncoder[2] = {0, 1}; // upper gold knob, lower gold knob
-constexpr int32_t kChannelForHorizontalEncoder = 2;
-constexpr int32_t kChannelForVerticalEncoder = 3;
+constexpr int32_t kChannelForModEncoder[2] = {3, 2}; // lower gold knob (mod encoder 0), upper gold knob (mod encoder 1)
+constexpr int32_t kChannelForHorizontalEncoder = 0;  // upper black encoder
+constexpr int32_t kChannelForVerticalEncoder = 1;    // lower black encoder
 
 // ---- Layout ----------------------------------------------------------------------------------------------------
 /// Each track uses two pad rows. The pattern sits on the upper one and the track's playhead on the one below.

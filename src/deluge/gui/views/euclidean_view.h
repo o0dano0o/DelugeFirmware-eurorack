@@ -34,8 +34,8 @@ class ModelStackWithTimelineCounter;
 /// (the NoteRow's independent loop length), so the four tracks drift against each other as polyrhythms.
 ///
 /// Controls (see the mapping constants in euclidean_view.cpp to change them):
-///   upper gold knob -> gate 1             lower gold knob      -> gate 2
-///   horizontal <>   -> gate 3             vertical (up/down)   -> gate 4
+///   upper black encoder (horizontal) -> gate 1    lower black encoder (vertical) -> gate 2
+///   upper gold knob                  -> gate 3    lower gold knob                -> gate 4
 ///   turning an encoder sets that track's number of hits, spread evenly (a Euclidean rhythm)
 ///   hold SHIFT while turning it -> that track's length in steps
 ///   pattern pads    -> toggle a gate event on that step
