@@ -972,7 +972,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 		bool isHit = hits & (1u << step);
 		RGB pad = isHit ? colour : empty;
 		if (step >= span && !isHit) {
-			pad = colour.dim(5); // Padding: part of the track, but outside the Euclidean pattern
+			pad = RGB::monochrome(18); // Padding: part of the track, but outside the Euclidean pattern
 		}
 		if (step == startStep) {
 			pad = isHit ? startColour : startEmpty;
