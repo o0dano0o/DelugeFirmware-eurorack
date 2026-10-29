@@ -43,6 +43,9 @@ void tick();
 /// Called when playback starts; restarts the chaos from its seed so each play repeats
 void playbackBegun();
 
+/// Song tempo in BPM (a fallback value if there is no song)
+float getBpm();
+
 ChaosEngine& engine();
 
 } // namespace deluge::chaos::runner

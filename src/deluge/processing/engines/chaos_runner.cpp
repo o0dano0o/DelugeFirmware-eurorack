@@ -64,6 +64,10 @@ void writeOutputs() {
 }
 } // namespace
 
+float getBpm() {
+	return currentBpm();
+}
+
 ChaosEngine& engine() {
 	return chaosEngine;
 }

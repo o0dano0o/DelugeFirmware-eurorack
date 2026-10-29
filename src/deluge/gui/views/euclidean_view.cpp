@@ -21,6 +21,7 @@
 #include "gui/colour/colour.h"
 #include "gui/menu_item/colour.h"
 #include "gui/ui/ui.h"
+#include "gui/views/chaos_view.h"
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/view.h"
 #include "hid/button.h"
@@ -721,6 +722,18 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		}
 		else {
 			display->setScrollingText(text);
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
+	// CV on its own opens the chaos pad view
+	if (b == CV && !Buttons::isShiftButtonPressed()) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+			display->cancelPopup();
+			changeRootUI(&chaosView);
 		}
 		return ActionResult::DEALT_WITH;
 	}
