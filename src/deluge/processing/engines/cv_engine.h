@@ -96,6 +96,14 @@ public:
 
 	void sendVoltageOut(uint8_t channel, uint16_t voltage);
 
+	/// Chaos mode: while a CV channel's bit is set in this mask, only sendChaosVoltage() may change that channel's
+	/// voltage. Note-ons (e.g. from Euclidean gate rows) no longer write to it. Clearing a bit hands the channel back
+	/// and restores the voltage of the note that was last played on it.
+	void setChaosOwnedCV(uint8_t mask);
+	uint8_t getChaosOwnedCV() const { return chaosOwnedCV_; }
+	/// Writes a DAC code to a chaos-owned CV channel, skipping the write if the value hasn't changed
+	void sendChaosVoltage(uint8_t channel, uint16_t code);
+
 	inline bool isNoteOn(int32_t channel, int32_t note) {
 		return (gateChannels[channel].on && cvChannels[channel].noteCurrentlyPlaying == note);
 	}
@@ -106,6 +114,8 @@ private:
 	void switchGateOn(int32_t channel, int32_t doInstantlyIfPossible = false);
 	/// signifies there's a gate that can't go until the cv is output
 	bool cvOutPending{false};
+	uint8_t chaosOwnedCV_{0};
+	int32_t lastChaosCode_[NUM_PHYSICAL_CV_CHANNELS] = {-1, -1};
 	/// gate 1-4 as synths or drums
 	bool gateOutputPending{false};
 	/// gate 3 as a run signal

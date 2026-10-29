@@ -40,6 +40,7 @@
 #include "model/note/note_row.h"
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
+#include "processing/engines/chaos_runner.h"
 #include "storage/storage_manager.h"
 #include "util/functions.h"
 #include <algorithm>
@@ -685,6 +686,19 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 			}
 			return ActionResult::DEALT_WITH;
 		}
+	}
+
+	// Temporary milestone-1 switch: pressing the select encoder toggles chaos control of CV 1 and CV 2
+	if (b == SELECT_ENC && on) {
+		bool enable = !deluge::chaos::runner::isEnabled();
+		deluge::chaos::runner::setEnabled(enable);
+		if (display->haveOLED()) {
+			display->popupTextTemporary(enable ? "Chaos CV on" : "Chaos CV off");
+		}
+		else {
+			display->displayPopup(enable ? "CH ON" : "CH OFF");
+		}
+		return ActionResult::DEALT_WITH;
 	}
 
 	// BACK, or SHIFT+CV again, returns to the normal Kit clip view

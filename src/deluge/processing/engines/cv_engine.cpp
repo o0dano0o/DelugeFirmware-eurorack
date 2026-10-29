@@ -173,7 +173,11 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 		int32_t voltage;
 
 		// If it's not a gate-only note-on...
-		if (note != ALL_NOTES_OFF) {
+		if (note != ALL_NOTES_OFF && channel < NUM_PHYSICAL_CV_CHANNELS && (chaosOwnedCV_ & (1 << channel))) {
+			// Chaos owns this channel's CV, so only the gate follows the note
+			switchGateOn(channel);
+		}
+		else if (note != ALL_NOTES_OFF) {
 
 			// Calculate the voltage
 			voltage = calculateVoltage(note, channel);
@@ -191,6 +195,29 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 			cvChannels[channel].noteCurrentlyPlaying = note;
 		}
 	}
+}
+
+void CVEngine::setChaosOwnedCV(uint8_t mask) {
+	mask &= (1 << NUM_PHYSICAL_CV_CHANNELS) - 1;
+	uint8_t released = chaosOwnedCV_ & ~mask;
+	chaosOwnedCV_ = mask;
+	for (uint8_t ch = 0; ch < NUM_PHYSICAL_CV_CHANNELS; ch++) {
+		lastChaosCode_[ch] = -1;
+		if (released & (1 << ch)) {
+			recalculateCVChannelVoltage(ch);
+		}
+	}
+}
+
+void CVEngine::sendChaosVoltage(uint8_t channel, uint16_t code) {
+	if (channel >= NUM_PHYSICAL_CV_CHANNELS || !(chaosOwnedCV_ & (1 << channel))) {
+		return;
+	}
+	if (lastChaosCode_[channel] == code) {
+		return;
+	}
+	lastChaosCode_[channel] = code;
+	sendVoltageOut(channel, code);
 }
 
 void CVEngine::sendVoltageOut(uint8_t channel, uint16_t voltage) {
@@ -233,6 +260,9 @@ void CVEngine::setCVPitchBend(uint8_t channel, int32_t value, bool outputToo) {
 // Does it even if the corresponding gate isn't "on", because the note might still be audible on the connected physical
 // synth
 void CVEngine::recalculateCVChannelVoltage(uint8_t channel) {
+	if (chaosOwnedCV_ & (1 << channel)) {
+		return;
+	}
 	int32_t voltage = calculateVoltage(cvChannels[channel].noteCurrentlyPlaying, channel);
 
 	voltage = std::min(voltage, (int32_t)65535);

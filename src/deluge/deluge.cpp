@@ -60,6 +60,7 @@
 #include "playback/mode/arrangement.h"
 #include "playback/mode/session.h"
 #include "processing/engines/audio_engine.h"
+#include "processing/engines/chaos_runner.h"
 #include "processing/engines/cv_engine.h"
 #include "scheduler_api.h"
 #include "storage/audio/audio_file_manager.h"
@@ -582,6 +583,8 @@ void registerTasks() {
 	// handles animations and checks on the timers for any infrequent actions
 	// long term this should probably be made into an idle task
 	addRepeatingTask([]() { uiTimerManager.routine(); }, p++, 0.0001, 0.0007, 0.01, "ui routine", RESOURCE_NONE);
+	// steps the chaos engine and writes its CV outputs (does nothing unless chaos is switched on)
+	addRepeatingTask([]() { deluge::chaos::runner::tick(); }, p++, 0.001, 0.004, 0.02, "chaos", RESOURCE_NONE);
 
 	// addRepeatingTask([]() { AudioEngine::routineWithClusterLoading(true); }, 0, 1 / 44100., 16 / 44100., 32 / 44100.,
 	// true); addRepeatingTask(&(AudioEngine::routine), 0, 16 / 44100., 64 / 44100., true);
