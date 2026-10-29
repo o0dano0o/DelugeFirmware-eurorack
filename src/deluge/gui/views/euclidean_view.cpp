@@ -160,6 +160,10 @@ void EuclideanView::focusRegained() {
 		step = -1;
 	}
 
+	// The clip view's playhead is a column of LEDs beside the pads that only that view updates. This view draws its
+	// own playheads in the rows, so switch the column off rather than leave it frozen where the clip view left it.
+	PadLEDs::clearTickSquares();
+
 	if (display->haveOLED()) {
 		renderUIsForOled();
 	}
