@@ -418,6 +418,7 @@ void EuclideanView::rotateTrack(int32_t channel, int32_t offset) {
 	if (numNotes == 0 || shift == 0) {
 		rotation_[channel] = newRotation;
 		showRotationPopup(channel, newRotation);
+		uiNeedsRendering(this, rowsForChannel(channel), 0); // The start marker moves even if there are no hits
 		return;
 	}
 
@@ -731,8 +732,10 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 
 	RGB colour = colourForChannel(channel);
 	RGB empty = colour.dim(3);
-	// Step 1, where the pattern starts, is tinted a different shade so rotation is easy to read. Its empty state is a
-	// touch brighter than other empty steps so the start point shows even when there's no hit on it.
+	// The pattern's start point is tinted a different shade. It moves with the rotation (it's where the un-rotated
+	// step 1 has been carried to), so you can see where the rhythm begins. Its empty state is a touch brighter than
+	// other empty steps so it shows even when there's no hit on it.
+	int32_t startStep = rotation_[channel] % std::max(numSteps, 1);
 	RGB startColour = RGB::fromHue(channel * 48 + 24);
 	RGB startEmpty = startColour.dim(2);
 	int32_t playheadStep = getPlayheadStep(clip, channel);
@@ -745,7 +748,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 
 		bool isHit = hits & (1u << step);
 		RGB pad = isHit ? colour : empty;
-		if (step == 0) {
+		if (step == startStep) {
 			pad = isHit ? startColour : startEmpty;
 		}
 		if (step == playheadStep) {
