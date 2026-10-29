@@ -309,6 +309,34 @@ void EuclideanView::editTrackLength(int32_t channel, int32_t offset) {
 	uiNeedsRendering(this, rowsForChannel(channel), 0);
 }
 
+int32_t EuclideanView::rowForStep(int32_t channel, int32_t step) const {
+	int32_t local = step - page_ * kStepsPerPage;
+	if (local < 0 || local >= kStepsPerPage) {
+		return -1;
+	}
+	return (local < kDisplayWidth) ? topRowForChannel(channel) : bottomRowForChannel(channel);
+}
+
+void EuclideanView::showPagePopup() {
+	char text[24];
+	char* end = text;
+	if (display->haveOLED()) {
+		memcpy(end, "Steps ", 6);
+		end += 6;
+		end = appendNumber(end, page_ * kStepsPerPage + 1);
+		*end++ = '-';
+		end = appendNumber(end, (page_ + 1) * kStepsPerPage);
+		*end = '\0';
+		display->popupTextTemporary(text);
+	}
+	else {
+		*end++ = 'P';
+		end = appendNumber(end, page_ + 1);
+		*end = '\0';
+		display->displayPopup(text);
+	}
+}
+
 int32_t EuclideanView::getPatternSpan(NoteRow* noteRow, int32_t numSteps) {
 	int32_t padding = std::min<int32_t>(noteRow->euclidPadding, std::max<int32_t>(numSteps - 1, 0));
 	return std::max<int32_t>(numSteps - padding, 1);
@@ -674,8 +702,23 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 }
 
 ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
-	// The audition column (right of the mute column) does nothing here.
+	// The audition column (right of the mute column) picks the page of steps: each track's upper pad shows steps 1-32,
+	// its lower pad steps 33-64.
 	if (x > kDisplayWidth) {
+		if (velocity) {
+			for (int32_t c = 0; c < kNumGateTracks; c++) {
+				int32_t newPage = (y == topRowForChannel(c)) ? 0 : (y == bottomRowForChannel(c)) ? 1 : -1;
+				if (newPage >= 0 && newPage < kNumPages) {
+					if (newPage != page_) {
+						page_ = newPage;
+						heldPad_ = HeldPad{};
+						refreshAll();
+					}
+					showPagePopup();
+					break;
+				}
+			}
+		}
 		return ActionResult::DEALT_WITH;
 	}
 
@@ -703,12 +746,12 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	for (int32_t c = 0; c < kNumGateTracks; c++) {
 		if (y == topRowForChannel(c)) {
 			channel = c;
-			step = x;
+			step = page_ * kStepsPerPage + x;
 			break;
 		}
 		if (y == bottomRowForChannel(c)) {
 			channel = c;
-			step = kDisplayWidth + x;
+			step = page_ * kStepsPerPage + kDisplayWidth + x;
 			break;
 		}
 	}
@@ -794,7 +837,10 @@ void EuclideanView::toggleStep(int32_t channel, int32_t step, bool clear) {
 	}
 
 	clip->expectEvent();
-	uiNeedsRendering(this, 1 << ((step < kDisplayWidth) ? topRowForChannel(channel) : bottomRowForChannel(channel)), 0);
+	int32_t row = rowForStep(channel, step);
+	if (row >= 0) {
+		uiNeedsRendering(this, 1 << row, 0);
+	}
 }
 
 void EuclideanView::selectEncoderAction(int8_t offset) {
@@ -846,10 +892,10 @@ void EuclideanView::selectEncoderAction(int8_t offset) {
 			}
 		}
 		clip->expectEvent();
-		uiNeedsRendering(this,
-		                 1 << ((heldPad_.step < kDisplayWidth) ? topRowForChannel(heldPad_.channel)
-		                                                       : bottomRowForChannel(heldPad_.channel)),
-		                 0);
+		int32_t row = rowForStep(heldPad_.channel, heldPad_.step);
+		if (row >= 0) {
+			uiNeedsRendering(this, 1 << row, 0);
+		}
 	}
 
 	heldPad_.edited = true;
@@ -938,7 +984,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 	int32_t numSteps = getNumSteps(modelStack, stepWidth);
 
 	// Which steps hold a gate event
-	uint32_t hits = 0;
+	uint64_t hits = 0;
 	int32_t probabilities[kMaxSteps];
 	for (int32_t& probability : probabilities) {
 		probability = kNumProbabilityValues;
@@ -947,7 +993,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 		Note* note = noteRow->notes.getElement(i);
 		uint32_t step = (uint32_t)note->pos / stepWidth;
 		if (step < (uint32_t)kMaxSteps) {
-			hits |= (1u << step);
+			hits |= (1ull << step);
 			probabilities[step] = std::min<int32_t>(note->getProbability() & 127, kNumProbabilityValues);
 		}
 	}
@@ -963,13 +1009,17 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 	RGB startEmpty = startColour.dim(2);
 	int32_t playheadStep = getPlayheadStep(clip, channel);
 
-	for (int32_t step = 0; step < numSteps; step++) {
-		int32_t y = (step < kDisplayWidth) ? topRowForChannel(channel) : bottomRowForChannel(channel);
+	for (int32_t local = 0; local < kStepsPerPage; local++) {
+		int32_t step = page_ * kStepsPerPage + local;
+		if (step >= numSteps) {
+			break;
+		}
+		int32_t y = (local < kDisplayWidth) ? topRowForChannel(channel) : bottomRowForChannel(channel);
 		if (!(whichRows & (1u << y))) {
 			continue;
 		}
 
-		bool isHit = hits & (1u << step);
+		bool isHit = hits & (1ull << step);
 		RGB pad = isHit ? colour : empty;
 		if (step >= span && !isHit) {
 			pad = RGB::monochrome(18); // Padding: part of the track, but outside the Euclidean pattern
@@ -985,7 +1035,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 		if (step == playheadStep) {
 			pad = isHit ? colours::white : RGB::monochrome(60);
 		}
-		image[y][step % kDisplayWidth] = pad;
+		image[y][local % kDisplayWidth] = pad;
 	}
 }
 
@@ -1022,6 +1072,11 @@ bool EuclideanView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth 
 			else {
 				image[y][kDisplayWidth] = menu_item::activeColourMenu.getRGB();
 			}
+
+			// Page pad (second sidebar column): upper pad = steps 1-32, lower pad = steps 33-64, lit for the page
+			// showing
+			int32_t padPage = (y == topRowForChannel(c)) ? 0 : 1;
+			image[y][kDisplayWidth + 1] = (padPage == page_) ? RGB::monochrome(80) : RGB::monochrome(10);
 		}
 	}
 	return true;

@@ -50,8 +50,11 @@ public:
 	EuclideanView() = default;
 
 	static constexpr int32_t kNumGateTracks = 4;
-	/// Longest track the view can show: each track has two rows of one step per pad column
-	static constexpr int32_t kMaxSteps = 2 * kDisplayWidth;
+	/// Steps shown at once: each track has two rows of one step per pad column
+	static constexpr int32_t kStepsPerPage = 2 * kDisplayWidth;
+	/// Longest track the view can hold: two pages
+	static constexpr int32_t kNumPages = 2;
+	static constexpr int32_t kMaxSteps = kNumPages * kStepsPerPage;
 
 	// UI plumbing
 	bool opened() override;
@@ -126,6 +129,14 @@ private:
 
 	/// Step each track's playhead was last drawn at, so graphicsRoutine only redraws on a change
 	int32_t lastDrawnPlayheadStep_[kNumGateTracks] = {-1, -1, -1, -1};
+
+	/// Which page of steps is showing (all four tracks page together)
+	int32_t page_ = 0;
+
+	/// The pad row showing `step` of `channel` on the current page, or -1 if that step is on another page
+	int32_t rowForStep(int32_t channel, int32_t step) const;
+
+	void showPagePopup();
 
 	/// Whether each track's encoder is currently pressed in (turning it then rotates the pattern)
 	bool encoderHeld_[kNumGateTracks] = {false, false, false, false};
