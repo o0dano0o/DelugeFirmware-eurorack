@@ -104,6 +104,13 @@ public:
 	/// Writes a DAC code to a chaos-owned CV channel, skipping the write if the value hasn't changed
 	void sendChaosVoltage(uint8_t channel, uint16_t code);
 
+	/// Chaos mode for gates: while a gate's bit is set, note-ons and note-offs for that channel are ignored (CV
+	/// included) and only sendChaosGate() moves it. Gates set to SPECIAL (run/clock) can't be owned. Releasing a
+	/// gate switches it off.
+	void setChaosOwnedGates(uint8_t mask);
+	uint8_t getChaosOwnedGates() const { return chaosOwnedGate_; }
+	void sendChaosGate(uint8_t channel, bool high);
+
 	inline bool isNoteOn(int32_t channel, int32_t note) {
 		return (gateChannels[channel].on && cvChannels[channel].noteCurrentlyPlaying == note);
 	}
@@ -115,6 +122,7 @@ private:
 	/// signifies there's a gate that can't go until the cv is output
 	bool cvOutPending{false};
 	uint8_t chaosOwnedCV_{0};
+	uint8_t chaosOwnedGate_{0};
 	int32_t lastChaosCode_[NUM_PHYSICAL_CV_CHANNELS] = {-1, -1};
 	/// gate 1-4 as synths or drums
 	bool gateOutputPending{false};

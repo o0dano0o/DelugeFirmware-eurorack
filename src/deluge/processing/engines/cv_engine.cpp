@@ -20,6 +20,7 @@
 #include "hid/display/display.h"
 #include "io/debug/log.h"
 #include "processing/engines/audio_engine.h"
+#include "processing/engines/chaos_runner.h"
 #include "util/comparison.h"
 #include "util/functions.h"
 #include <math.h>
@@ -153,6 +154,11 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 		return;
 	}
 
+	// If chaos is driving this gate, it owns the gate and its CV too
+	if (chaosOwnedGate_ & (1 << channel)) {
+		return;
+	}
+
 	// Note-off
 	if (!on) {
 
@@ -206,6 +212,37 @@ void CVEngine::setChaosOwnedCV(uint8_t mask) {
 		if (released & (1 << ch)) {
 			recalculateCVChannelVoltage(ch);
 		}
+	}
+}
+
+void CVEngine::setChaosOwnedGates(uint8_t mask) {
+	mask &= (1 << NUM_GATE_CHANNELS) - 1;
+	for (uint8_t ch = 0; ch < NUM_GATE_CHANNELS; ch++) {
+		if (gateChannels[ch].mode == GateType::SPECIAL) {
+			mask &= ~(1 << ch);
+		}
+	}
+	uint8_t released = chaosOwnedGate_ & ~mask;
+	chaosOwnedGate_ = mask;
+	for (uint8_t ch = 0; ch < NUM_GATE_CHANNELS; ch++) {
+		if (released & (1 << ch)) {
+			switchGateOff(ch);
+		}
+	}
+}
+
+void CVEngine::sendChaosGate(uint8_t channel, bool high) {
+	if (channel >= NUM_GATE_CHANNELS || !(chaosOwnedGate_ & (1 << channel))) {
+		return;
+	}
+	if (gateChannels[channel].on == high) {
+		return;
+	}
+	if (high) {
+		switchGateOn(channel, true);
+	}
+	else {
+		switchGateOff(channel);
 	}
 }
 
@@ -302,6 +339,7 @@ void CVEngine::analogOutTick() {
 }
 
 void CVEngine::playbackBegun() {
+	deluge::chaos::runner::playbackBegun();
 	clockState = false;
 	updateRunOutput();
 }

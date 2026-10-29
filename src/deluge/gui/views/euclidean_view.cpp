@@ -688,16 +688,39 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		}
 	}
 
-	// Temporary milestone-1 switch: pressing the select encoder toggles chaos control of CV 1 and CV 2
+	// Temporary switches while the chaos UI is built. Select encoder: cycles chaos off, CV only, CV and gates.
+	// SHIFT + select encoder: free time / tempo sync.
 	if (b == SELECT_ENC && on) {
-		bool enable = !deluge::chaos::runner::isEnabled();
-		deluge::chaos::runner::setEnabled(enable);
-		if (display->haveOLED()) {
-			display->popupTextTemporary(enable ? "Chaos CV on" : "Chaos CV off");
+		using deluge::chaos::runner::Mode;
+		char const* text;
+		if (Buttons::isShiftButtonPressed()) {
+			bool sync = !deluge::chaos::runner::isTempoSync();
+			deluge::chaos::runner::setTempoSync(sync);
+			text = sync ? "Chaos tempo sync" : "Chaos free time";
 		}
 		else {
-			// too long for four digits, so scroll it
-			display->setScrollingText(enable ? "Chaos CV on" : "Chaos CV off");
+			Mode next = Mode::OFF;
+			switch (deluge::chaos::runner::getMode()) {
+			case Mode::OFF:
+				next = Mode::CV;
+				text = "Chaos CV";
+				break;
+			case Mode::CV:
+				next = Mode::CV_AND_GATES;
+				text = "Chaos CV and gates";
+				break;
+			default:
+				next = Mode::OFF;
+				text = "Chaos off";
+				break;
+			}
+			deluge::chaos::runner::setMode(next);
+		}
+		if (display->haveOLED()) {
+			display->popupTextTemporary(text);
+		}
+		else {
+			display->setScrollingText(text);
 		}
 		return ActionResult::DEALT_WITH;
 	}

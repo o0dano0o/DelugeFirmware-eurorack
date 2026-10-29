@@ -20,15 +20,28 @@
 #include "processing/engines/chaos_engine.h"
 
 /// Glue between the pure ChaosEngine and the hardware: a scheduler task steps the engine in real time and writes the
-/// result to the CV outputs. Milestone 1 drives CV 1 and CV 2 only.
+/// result to the CV outputs and, optionally, the gates (gate N follows rule N).
 namespace deluge::chaos::runner {
 
-/// Turns chaos CV on or off. On: chaos takes over both CV outputs. Off: they go back to normal note control.
-void setEnabled(bool enabled);
-bool isEnabled();
+enum class Mode : uint8_t {
+	OFF,
+	CV,          ///< chaos drives CV 1 and CV 2
+	CV_AND_GATES ///< ... and gates 1 to 4 (except any set to a special function) follow gate rules 1 to 4
+};
+
+/// Chaos takes over (or hands back) the outputs for the given mode
+void setMode(Mode mode);
+Mode getMode();
+
+/// Free time: periods in seconds. Tempo time: periods in beats, so the chaos follows the song's tempo.
+void setTempoSync(bool sync);
+bool isTempoSync();
 
 /// Called from the scheduler (about every 2 to 4 ms)
 void tick();
+
+/// Called when playback starts; restarts the chaos from its seed so each play repeats
+void playbackBegun();
 
 ChaosEngine& engine();
 
