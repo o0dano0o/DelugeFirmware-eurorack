@@ -32,11 +32,13 @@
 #include "model/clip/instrument_clip.h"
 #include "model/consequence/consequence_note_row_length.h"
 #include "model/drum/gate_drum.h"
+#include "model/instrument/kit.h"
 #include "model/model_stack.h"
 #include "model/note/note.h"
 #include "model/note/note_row.h"
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
+#include "storage/storage_manager.h"
 #include "util/functions.h"
 #include <algorithm>
 #include <cstring>
@@ -82,8 +84,62 @@ char* appendNumber(char* out, int32_t value) {
 } // namespace
 
 bool EuclideanView::opened() {
+	ensureGateRows(getCurrentInstrumentClip());
 	focusRegained();
 	return true;
+}
+
+void EuclideanView::ensureGateRows(InstrumentClip* clip) {
+	if (!clip || clip->type != ClipType::INSTRUMENT || clip->output->type != OutputType::KIT) {
+		return;
+	}
+
+	Kit* kit = static_cast<Kit*>(clip->output);
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStack = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+
+	bool madeChanges = false;
+
+	for (int32_t channel = 0; channel < kNumGateTracks; channel++) {
+		int32_t existingIndex;
+		if (findGateRow(clip, channel, existingIndex)) {
+			continue;
+		}
+
+		// Adding rows restructures the Kit, which can't be undone by the normal undo history
+		if (!madeChanges) {
+			actionLogger.deleteAllLogs();
+			madeChanges = true;
+		}
+
+		// Reuse a gate drum for this output if the Kit already has one that no row in this clip is using
+		Drum* drum = kit->getGateDrumForChannel(channel);
+		if (!drum) {
+			drum = StorageManager::createNewDrum(DrumType::GATE);
+			if (!drum) {
+				display->displayError(Error::INSUFFICIENT_RAM);
+				break;
+			}
+			static_cast<GateDrum*>(drum)->channel = channel;
+			kit->addDrum(drum);
+		}
+
+		int32_t noteRowIndex;
+		NoteRow* noteRow = clip->createNewNoteRowForKit(modelStack, false, &noteRowIndex);
+		if (!noteRow) {
+			display->displayError(Error::INSUFFICIENT_RAM);
+			break;
+		}
+
+		ModelStackWithNoteRow* modelStackWithNoteRow = modelStack->addNoteRow(noteRowIndex, noteRow);
+		ParamManager paramManager;
+		noteRow->setDrum(drum, kit, modelStackWithNoteRow, nullptr, &paramManager);
+	}
+
+	if (madeChanges) {
+		kit->beenEdited();
+	}
 }
 
 void EuclideanView::focusRegained() {

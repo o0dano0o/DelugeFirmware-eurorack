@@ -38,7 +38,8 @@ class ModelStackWithTimelineCounter;
 ///   horizontal <>   -> gate 3 length     vertical (up/down)   -> gate 4 length
 ///   BACK            -> return to the Kit clip view
 ///
-/// Enter from a Kit clip with SHIFT + KIT.
+/// Enter from a Kit clip with SHIFT + KIT. Any of the four gate rows the Kit doesn't have yet are created
+/// automatically on entry, so no manual gate setup is needed.
 class EuclideanView final : public ClipView {
 public:
 	EuclideanView() = default;
@@ -70,6 +71,10 @@ public:
 	void selectEncoderAction(int8_t offset) override {}
 
 private:
+	/// Makes sure the current Kit clip has a gate row for each of gate outputs 1-4, creating any that are missing so
+	/// the view works without any manual setup. Existing rows are left alone.
+	void ensureGateRows(InstrumentClip* clip);
+
 	/// Finds the Kit row driving gate channel `channel` (0-3). Returns nullptr if the current clip is not a Kit or has
 	/// no GateDrum row for that channel. On success `noteRowIndex` is the row's index within the clip.
 	NoteRow* findGateRow(InstrumentClip* clip, int32_t channel, int32_t& noteRowIndex);
