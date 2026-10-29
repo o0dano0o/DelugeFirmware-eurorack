@@ -65,7 +65,7 @@ private:
 
 	void changePeriod(int32_t sloth, int32_t offset);
 	void changeCoupling(int32_t offset);
-	void showPopup(char const* text);
+	void showPopup(char const* text, bool scrollOn7Seg = false);
 	/// Seconds one loop of this sloth takes right now (periods can be in beats)
 	float periodSeconds(int32_t sloth) const;
 

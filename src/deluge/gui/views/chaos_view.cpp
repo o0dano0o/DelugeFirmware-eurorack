@@ -219,12 +219,17 @@ void ChaosView::renderOLED(deluge::hid::display::oled_canvas::Canvas& canvas) {
 	canvas.drawStringCentred(text, yPos, kTextSpacingX, kTextSpacingY);
 }
 
-void ChaosView::showPopup(char const* text) {
+void ChaosView::showPopup(char const* text, bool scrollOn7Seg) {
 	if (display->haveOLED()) {
 		display->popupTextTemporary(text);
 	}
+	else if (scrollOn7Seg) {
+		// names are longer than four digits
+		display->setScrollingText(text);
+	}
 	else {
-		display->displayPopup(text);
+		// no flashing, right-aligned, like the Euclidean view's number popups
+		display->displayPopup(text, 0, true);
 	}
 }
 
@@ -236,8 +241,15 @@ void ChaosView::changePeriod(int32_t sloth, int32_t offset) {
 	e.setPeriod(sloth, p);
 
 	char text[24];
-	snprintf(text, sizeof(text), display->haveOLED() ? "%c: %.1f %s" : "%c %.0f", 'A' + sloth, p,
-	         tempo ? "beats" : "s");
+	if (display->haveOLED()) {
+		snprintf(text, sizeof(text), "%c: %.1f %s", 'A' + sloth, p, tempo ? "beats" : "s");
+	}
+	else if (p < 999.5f) {
+		snprintf(text, sizeof(text), "%c%.0f", 'A' + sloth, p); // letter plus up to three digits
+	}
+	else {
+		snprintf(text, sizeof(text), "%.0f", p); // four digits, no room for the letter
+	}
 	showPopup(text);
 	if (display->haveOLED()) {
 		renderUIsForOled();
@@ -264,7 +276,7 @@ void ChaosView::selectEncoderAction(int8_t offset) {
 			}
 		}
 	}
-	showPopup(kModelNames[m]);
+	showPopup(kModelNames[m], true);
 	if (display->haveOLED()) {
 		renderUIsForOled();
 	}
@@ -312,7 +324,7 @@ ActionResult ChaosView::buttonAction(deluge::hid::Button b, bool on, bool inCard
 ActionResult ChaosView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	if (velocity && x < kDisplayWidth) {
 		view_ = (view_ + 1) % kNumViews;
-		showPopup(kViewNames[view_]);
+		showPopup(kViewNames[view_], true);
 		if (display->haveOLED()) {
 			renderUIsForOled();
 		}
