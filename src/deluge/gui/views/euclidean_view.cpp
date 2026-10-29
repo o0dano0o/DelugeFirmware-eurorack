@@ -59,13 +59,16 @@ constexpr int32_t kChannelForHorizontalEncoder = 0;  // upper black encoder
 constexpr int32_t kChannelForVerticalEncoder = 1;    // lower black encoder
 
 // ---- Layout ----------------------------------------------------------------------------------------------------
-/// Each track uses two pad rows. The pattern sits on the upper one and the track's playhead on the one below.
-/// Track 0 is at the top of the grid.
-constexpr int32_t patternRowForChannel(int32_t channel) {
+/// Each track uses two pad rows, giving up to 32 steps: steps 1-16 on the upper row, steps 17-32 on the lower row.
+/// Track 0 is at the top of the grid. The playhead is drawn as a white step on whichever row it is on.
+constexpr int32_t topRowForChannel(int32_t channel) {
 	return kDisplayHeight - 1 - 2 * channel;
 }
-constexpr int32_t playheadRowForChannel(int32_t channel) {
-	return patternRowForChannel(channel) - 1;
+constexpr int32_t bottomRowForChannel(int32_t channel) {
+	return topRowForChannel(channel) - 1;
+}
+constexpr uint32_t rowsForChannel(int32_t channel) {
+	return (1u << topRowForChannel(channel)) | (1u << bottomRowForChannel(channel));
 }
 
 /// Spread the four tracks around the colour wheel so they're easy to tell apart
@@ -279,7 +282,7 @@ void EuclideanView::editTrackLength(int32_t channel, int32_t offset) {
 	if (display->haveOLED()) {
 		renderUIsForOled();
 	}
-	uiNeedsRendering(this, 1 << patternRowForChannel(channel), 0);
+	uiNeedsRendering(this, rowsForChannel(channel), 0);
 }
 
 void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
@@ -347,7 +350,7 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 	clip->expectEvent();
 
 	showHitsPopup(channel, newHits, std::min(numSteps, kMaxSteps));
-	uiNeedsRendering(this, 1 << patternRowForChannel(channel), 0);
+	uiNeedsRendering(this, rowsForChannel(channel), 0);
 }
 
 void EuclideanView::encoderTurned(int32_t channel, int32_t offset) {
@@ -427,15 +430,23 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 }
 
 ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
-	// Only act on presses, and only on the pattern pads (not the sidebar or playhead rows)
+	// Only act on presses on the step pads (not the sidebar)
 	if (!velocity || x >= kDisplayWidth) {
 		return ActionResult::DEALT_WITH;
 	}
 
+	// Work out which track and step this pad is: the upper row holds steps 1-16, the lower row 17-32
 	int32_t channel = -1;
+	int32_t step = 0;
 	for (int32_t c = 0; c < kNumGateTracks; c++) {
-		if (y == patternRowForChannel(c)) {
+		if (y == topRowForChannel(c)) {
 			channel = c;
+			step = x;
+			break;
+		}
+		if (y == bottomRowForChannel(c)) {
+			channel = c;
+			step = kDisplayWidth + x;
 			break;
 		}
 	}
@@ -460,16 +471,16 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
 
 	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
-	if (x >= getNumSteps(modelStack, stepWidth)) {
+	if (step >= getNumSteps(modelStack, stepWidth)) {
 		return ActionResult::DEALT_WITH; // Beyond this track's length
 	}
 
-	int32_t stepStart = x * stepWidth;
+	int32_t stepStart = step * stepWidth;
 
 	// Is there already a gate event on this step?
 	bool hasHit = false;
 	for (int32_t i = 0; i < noteRow->notes.getNumElements(); i++) {
-		if ((uint32_t)noteRow->notes.getElement(i)->pos / stepWidth == (uint32_t)x) {
+		if ((uint32_t)noteRow->notes.getElement(i)->pos / stepWidth == (uint32_t)step) {
 			hasHit = true;
 			break;
 		}
@@ -530,37 +541,20 @@ bool EuclideanView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth
 	}
 
 	for (int32_t channel = 0; channel < kNumGateTracks; channel++) {
-		int32_t patternRow = patternRowForChannel(channel);
-		int32_t playheadRow = playheadRowForChannel(channel);
-		if (whichRows & (1 << patternRow)) {
-			renderTrackRow(image[patternRow], channel, true);
-		}
-		if (whichRows & (1 << playheadRow)) {
-			renderTrackRow(image[playheadRow], channel, false);
-		}
+		renderTrack(image, channel, whichRows);
 	}
 
 	PadLEDs::renderingLock = false;
 	return true;
 }
 
-void EuclideanView::renderTrackRow(RGB* image, int32_t channel, bool patternRow) {
+void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int32_t channel, uint32_t whichRows) {
 	InstrumentClip* clip = getCurrentInstrumentClip();
 
 	int32_t noteRowIndex;
 	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
 	if (!noteRow) {
-		return; // Row stays dark: this gate isn't set up as a Kit row
-	}
-
-	RGB colour = colourForChannel(channel);
-
-	if (!patternRow) {
-		int32_t step = getPlayheadStep(clip, channel);
-		if (step >= 0) {
-			image[step] = colours::white;
-		}
-		return;
+		return; // Rows stay dark: this gate isn't set up as a Kit row
 	}
 
 	char modelStackMemory[MODEL_STACK_MAX_SIZE];
@@ -580,9 +574,22 @@ void EuclideanView::renderTrackRow(RGB* image, int32_t channel, bool patternRow)
 		}
 	}
 
+	RGB colour = colourForChannel(channel);
 	RGB empty = colour.dim(3);
-	for (int32_t x = 0; x < numSteps; x++) {
-		image[x] = (hits & (1u << x)) ? colour : empty;
+	int32_t playheadStep = getPlayheadStep(clip, channel);
+
+	for (int32_t step = 0; step < numSteps; step++) {
+		int32_t y = (step < kDisplayWidth) ? topRowForChannel(channel) : bottomRowForChannel(channel);
+		if (!(whichRows & (1u << y))) {
+			continue;
+		}
+
+		bool isHit = hits & (1u << step);
+		RGB pad = isHit ? colour : empty;
+		if (step == playheadStep) {
+			pad = isHit ? colours::white : RGB::monochrome(60);
+		}
+		image[y][step % kDisplayWidth] = pad;
 	}
 }
 
@@ -609,13 +616,13 @@ void EuclideanView::graphicsRoutine() {
 		return;
 	}
 
-	// Redraw only the playhead rows whose step has moved
+	// Redraw only the tracks whose playhead has moved
 	uint32_t rowsToRedraw = 0;
 	for (int32_t channel = 0; channel < kNumGateTracks; channel++) {
 		int32_t step = getPlayheadStep(clip, channel);
 		if (step != lastDrawnPlayheadStep_[channel]) {
 			lastDrawnPlayheadStep_[channel] = step;
-			rowsToRedraw |= 1u << playheadRowForChannel(channel);
+			rowsToRedraw |= rowsForChannel(channel);
 		}
 	}
 

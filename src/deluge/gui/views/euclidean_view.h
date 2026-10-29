@@ -29,9 +29,10 @@ class ModelStackWithTimelineCounter;
 /// A Eurorack-oriented view of a Kit's four gate outputs, modelled on a Euclidean-circles style module.
 ///
 /// All four gate tracks (the Kit rows holding a GateDrum for gate channels 1-4) are shown at once. Each track gets two
-/// pad rows: the upper one shows the pattern (bright = gate event, dim = empty step inside the track's length, dark =
-/// beyond the length) and the lower one shows that track's own playhead. Each track has its own independent length
-/// (the NoteRow's independent loop length), so the four tracks drift against each other as polyrhythms.
+/// pad rows, giving up to 32 steps: steps 1-16 on the upper row and 17-32 on the lower row (bright = gate event,
+/// dim = empty step inside the track's length, dark = beyond the length). The track's playhead is the white step.
+/// Each track has its own independent length (the NoteRow's independent loop length), so the four tracks drift
+/// against each other as polyrhythms.
 ///
 /// Controls (see the mapping constants in euclidean_view.cpp to change them):
 ///   upper black encoder (horizontal) -> gate 1    lower black encoder (vertical) -> gate 2
@@ -49,8 +50,8 @@ public:
 	EuclideanView() = default;
 
 	static constexpr int32_t kNumGateTracks = 4;
-	/// Longest track the view can show: one step per pad column
-	static constexpr int32_t kMaxSteps = kDisplayWidth;
+	/// Longest track the view can show: each track has two rows of one step per pad column
+	static constexpr int32_t kMaxSteps = 2 * kDisplayWidth;
 
 	// UI plumbing
 	bool opened() override;
@@ -102,7 +103,7 @@ private:
 	int32_t getPlayheadStep(InstrumentClip* clip, int32_t channel);
 
 	void showLengthPopup(int32_t channel, int32_t numSteps);
-	void renderTrackRow(RGB* image, int32_t channel, bool patternRow);
+	void renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int32_t channel, uint32_t whichRows);
 	void refreshAll() { uiNeedsRendering(this); }
 
 	/// Step each track's playhead was last drawn at, so graphicsRoutine only redraws on a change
