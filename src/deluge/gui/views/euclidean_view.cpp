@@ -282,6 +282,108 @@ void EuclideanView::editTrackLength(int32_t channel, int32_t offset) {
 	uiNeedsRendering(this, 1 << patternRowForChannel(channel), 0);
 }
 
+void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
+	InstrumentClip* clip = getCurrentInstrumentClip();
+
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
+	if (!noteRow) {
+		return;
+	}
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithNoteRow* modelStack =
+	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	int32_t effectiveLength = modelStack->getLoopLength();
+	int32_t numSteps = (uint32_t)(effectiveLength - 1) / stepWidth + 1; // Round up
+
+	int32_t oldHits = noteRow->notes.getNumElements();
+	int32_t newHits = std::clamp<int32_t>(oldHits + offset, 0, numSteps);
+	if (newHits == oldHits) {
+		showHitsPopup(channel, oldHits, std::min(numSteps, kMaxSteps));
+		return;
+	}
+
+	// Build the new, evenly spread set of gate events up front so nothing can fail halfway through
+	NoteVector newNotes;
+	if (newHits) {
+		Error error = newNotes.insertAtIndex(0, newHits);
+		if (error != Error::NONE) {
+			display->displayError(error);
+			return;
+		}
+	}
+
+	for (int32_t i = 0; i < newHits; i++) {
+		Note* note = newNotes.getElement(i);
+		note->pos = (uint32_t)(i * numSteps) / (uint32_t)newHits * stepWidth;
+		note->length = stepWidth;
+		note->probability = noteRow->getDefaultProbability();
+		note->velocity = static_cast<Instrument*>(clip->output)->defaultVelocity;
+		note->lift = kDefaultLiftValue;
+		note->iterance = noteRow->getDefaultIterance();
+		note->fill = noteRow->getDefaultFill(modelStack);
+	}
+
+	// The last step can be shorter than a full step if the track length isn't a multiple of it
+	if (newHits) {
+		Note* last = newNotes.getElement(newHits - 1);
+		int32_t maxLength = effectiveLength - last->pos;
+		if (last->length > maxLength) {
+			last->length = maxLength;
+		}
+	}
+
+	// Record for undo (this steals the old note data into the undo history), then swap the new notes in
+	Action* action = actionLogger.getNewAction(ActionType::EUCLIDEAN_NUM_EVENTS_EDIT, ActionAddition::NOT_ALLOWED);
+	if (action) {
+		action->recordNoteArrayChangeDefinitely(clip, modelStack->noteRowId, &noteRow->notes, true);
+	}
+	noteRow->notes.swapStateWith(&newNotes);
+
+	clip->expectEvent();
+
+	showHitsPopup(channel, newHits, std::min(numSteps, kMaxSteps));
+	uiNeedsRendering(this, 1 << patternRowForChannel(channel), 0);
+}
+
+void EuclideanView::encoderTurned(int32_t channel, int32_t offset) {
+	if (Buttons::isShiftButtonPressed()) {
+		editTrackHits(channel, offset);
+	}
+	else {
+		editTrackLength(channel, offset);
+	}
+}
+
+void EuclideanView::showHitsPopup(int32_t channel, int32_t numHits, int32_t numSteps) {
+	if (display->haveOLED()) {
+		char text[32];
+		char* end = text;
+		memcpy(end, "Gate ", 5);
+		end += 5;
+		end = appendNumber(end, channel + 1);
+		memcpy(end, ": ", 2);
+		end += 2;
+		end = appendNumber(end, numHits);
+		*end++ = '/';
+		end = appendNumber(end, numSteps);
+		memcpy(end, " hits", 5);
+		end += 5;
+		*end = '\0';
+		display->popupTextTemporary(text);
+	}
+	else {
+		char text[12];
+		char* end = appendNumber(text, numHits);
+		*end = '\0';
+		display->displayPopup(text, 0, true);
+	}
+}
+
 void EuclideanView::showLengthPopup(int32_t channel, int32_t numSteps) {
 	if (display->haveOLED()) {
 		char text[24];
@@ -390,7 +492,7 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 }
 
 ActionResult EuclideanView::horizontalEncoderAction(int32_t offset) {
-	editTrackLength(kChannelForHorizontalEncoder, offset);
+	encoderTurned(kChannelForHorizontalEncoder, offset);
 	return ActionResult::DEALT_WITH;
 }
 
@@ -398,13 +500,13 @@ ActionResult EuclideanView::verticalEncoderAction(int32_t offset, bool inCardRou
 	if (inCardRoutine) {
 		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 	}
-	editTrackLength(kChannelForVerticalEncoder, offset);
+	encoderTurned(kChannelForVerticalEncoder, offset);
 	return ActionResult::DEALT_WITH;
 }
 
 void EuclideanView::modEncoderAction(int32_t whichModEncoder, int32_t offset) {
 	if (whichModEncoder >= 0 && whichModEncoder < 2) {
-		editTrackLength(kChannelForModEncoder[whichModEncoder], offset);
+		encoderTurned(kChannelForModEncoder[whichModEncoder], offset);
 	}
 }
 

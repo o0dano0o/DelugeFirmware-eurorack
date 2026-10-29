@@ -36,6 +36,7 @@ class ModelStackWithTimelineCounter;
 /// Controls (see the mapping constants in euclidean_view.cpp to change them):
 ///   upper gold knob -> gate 1 length     lower gold knob      -> gate 2 length
 ///   horizontal <>   -> gate 3 length     vertical (up/down)   -> gate 4 length
+///   hold SHIFT while turning any of those -> that track's number of hits, spread evenly (Euclidean)
 ///   pattern pads    -> toggle a gate event on that step
 ///   BACK            -> return to the Kit clip view
 ///
@@ -86,6 +87,15 @@ private:
 
 	/// Changes one track's length by `offset` steps, with undo support
 	void editTrackLength(int32_t channel, int32_t offset);
+
+	/// Changes one track's number of gate events by `offset` and respaces them as evenly as possible across the track
+	/// (a Euclidean rhythm), with undo support
+	void editTrackHits(int32_t channel, int32_t offset);
+
+	/// An encoder turn for a track: edits its hits while SHIFT is held, otherwise its length
+	void encoderTurned(int32_t channel, int32_t offset);
+
+	void showHitsPopup(int32_t channel, int32_t numHits, int32_t numSteps);
 
 	/// Step the track's playhead is on, or -1 if playback isn't running for this clip
 	int32_t getPlayheadStep(InstrumentClip* clip, int32_t channel);
