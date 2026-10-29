@@ -94,8 +94,14 @@ private:
 	/// (a Euclidean rhythm), with undo support
 	void editTrackHits(int32_t channel, int32_t offset);
 
-	/// An encoder turn for a track: edits its length while SHIFT is held, otherwise its hits
+	/// Rotates one track's pattern by `offset` steps (wrapping around its length), with undo support
+	void rotateTrack(int32_t channel, int32_t offset);
+
+	/// An encoder turn for a track: rotates it while that encoder is pressed in, edits its length while SHIFT is held,
+	/// otherwise edits its hits
 	void encoderTurned(int32_t channel, int32_t offset);
+
+	void showRotationPopup(int32_t channel, int32_t rotation);
 
 	void showHitsPopup(int32_t channel, int32_t numHits, int32_t numSteps);
 
@@ -108,6 +114,12 @@ private:
 
 	/// Step each track's playhead was last drawn at, so graphicsRoutine only redraws on a change
 	int32_t lastDrawnPlayheadStep_[kNumGateTracks] = {-1, -1, -1, -1};
+
+	/// Whether each track's encoder is currently pressed in (turning it then rotates the pattern)
+	bool encoderHeld_[kNumGateTracks] = {false, false, false, false};
+
+	/// How many steps each track's pattern has been rotated by, so changing the hit count keeps the rotation
+	int32_t rotation_[kNumGateTracks] = {0, 0, 0, 0};
 };
 
 extern EuclideanView euclideanView;

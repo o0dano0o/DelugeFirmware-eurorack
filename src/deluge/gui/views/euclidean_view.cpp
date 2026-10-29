@@ -86,6 +86,17 @@ char* appendNumber(char* out, int32_t value) {
 	return out;
 }
 
+/// Insertion sort of a (small) note vector by position
+void sortNotesByPos(NoteVector& notes) {
+	for (int32_t i = 1; i < notes.getNumElements(); i++) {
+		int32_t j = i;
+		while (j > 0 && notes.getElement(j - 1)->pos > notes.getElement(j)->pos) {
+			std::swap(*notes.getElement(j - 1), *notes.getElement(j));
+			j--;
+		}
+	}
+}
+
 } // namespace
 
 bool EuclideanView::opened() {
@@ -163,6 +174,10 @@ void EuclideanView::focusRegained() {
 	// The clip view's playhead is a column of LEDs beside the pads that only that view updates. This view draws its
 	// own playheads in the rows, so switch the column off rather than leave it frozen where the clip view left it.
 	PadLEDs::clearTickSquares();
+
+	for (bool& held : encoderHeld_) {
+		held = false;
+	}
 
 	if (display->haveOLED()) {
 		renderUIsForOled();
@@ -330,7 +345,9 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 
 	for (int32_t i = 0; i < newHits; i++) {
 		Note* note = newNotes.getElement(i);
-		note->pos = (uint32_t)(i * numSteps) / (uint32_t)newHits * stepWidth;
+		int32_t step = (int32_t)((uint32_t)(i * numSteps) / (uint32_t)newHits);
+		step = (step + rotation_[channel]) % numSteps; // Keep any rotation the user has dialled in
+		note->pos = step * stepWidth;
 		note->length = stepWidth;
 		note->probability = noteRow->getDefaultProbability();
 		note->velocity = static_cast<Instrument*>(clip->output)->defaultVelocity;
@@ -339,12 +356,15 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 		note->fill = noteRow->getDefaultFill(modelStack);
 	}
 
-	// The last step can be shorter than a full step if the track length isn't a multiple of it
-	if (newHits) {
-		Note* last = newNotes.getElement(newHits - 1);
-		int32_t maxLength = effectiveLength - last->pos;
-		if (last->length > maxLength) {
-			last->length = maxLength;
+	// A rotation can leave the events out of order, and notes must be sorted by position
+	sortNotesByPos(newNotes);
+
+	// A step can be shorter than a full step if the track length isn't a multiple of it
+	for (int32_t i = 0; i < newHits; i++) {
+		Note* note = newNotes.getElement(i);
+		int32_t maxLength = effectiveLength - note->pos;
+		if (note->length > maxLength) {
+			note->length = maxLength;
 		}
 	}
 
@@ -362,11 +382,101 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 }
 
 void EuclideanView::encoderTurned(int32_t channel, int32_t offset) {
-	if (Buttons::isShiftButtonPressed()) {
+	if (encoderHeld_[channel]) {
+		rotateTrack(channel, offset);
+	}
+	else if (Buttons::isShiftButtonPressed()) {
 		editTrackLength(channel, offset);
 	}
 	else {
 		editTrackHits(channel, offset);
+	}
+}
+
+void EuclideanView::rotateTrack(int32_t channel, int32_t offset) {
+	InstrumentClip* clip = getCurrentInstrumentClip();
+
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
+	if (!noteRow) {
+		return;
+	}
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithNoteRow* modelStack =
+	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	int32_t effectiveLength = modelStack->getLoopLength();
+	int32_t numSteps = (uint32_t)(effectiveLength - 1) / stepWidth + 1; // Round up
+
+	int32_t numNotes = noteRow->notes.getNumElements();
+	int32_t newRotation = (((rotation_[channel] + offset) % numSteps) + numSteps) % numSteps;
+	int32_t shift = (((offset % numSteps) + numSteps) % numSteps); // 0 .. numSteps-1, always forwards
+
+	if (numNotes == 0 || shift == 0) {
+		rotation_[channel] = newRotation;
+		showRotationPopup(channel, newRotation);
+		return;
+	}
+
+	// Build the rotated copy up front so nothing can fail halfway through
+	NoteVector newNotes;
+	Error error = newNotes.insertAtIndex(0, numNotes);
+	if (error != Error::NONE) {
+		display->displayError(error);
+		return;
+	}
+
+	for (int32_t i = 0; i < numNotes; i++) {
+		Note* dest = newNotes.getElement(i);
+		*dest = *noteRow->notes.getElement(i);
+		int32_t step = (int32_t)((uint32_t)dest->pos / stepWidth);
+		step = (step + shift) % numSteps;
+		dest->pos = step * stepWidth;
+	}
+	sortNotesByPos(newNotes);
+
+	for (int32_t i = 0; i < numNotes; i++) {
+		Note* note = newNotes.getElement(i);
+		int32_t maxLength = effectiveLength - note->pos;
+		if (note->length > maxLength) {
+			note->length = maxLength;
+		}
+	}
+
+	Action* action = actionLogger.getNewAction(ActionType::EUCLIDEAN_NUM_EVENTS_EDIT, ActionAddition::NOT_ALLOWED);
+	if (action) {
+		action->recordNoteArrayChangeDefinitely(clip, modelStack->noteRowId, &noteRow->notes, true);
+	}
+	noteRow->notes.swapStateWith(&newNotes);
+
+	rotation_[channel] = newRotation;
+	clip->expectEvent();
+
+	showRotationPopup(channel, newRotation);
+	uiNeedsRendering(this, rowsForChannel(channel), 0);
+}
+
+void EuclideanView::showRotationPopup(int32_t channel, int32_t rotation) {
+	if (display->haveOLED()) {
+		char text[32];
+		char* end = text;
+		memcpy(end, "Gate ", 5);
+		end += 5;
+		end = appendNumber(end, channel + 1);
+		memcpy(end, ": rotate ", 9);
+		end += 9;
+		end = appendNumber(end, rotation);
+		*end = '\0';
+		display->popupTextTemporary(text);
+	}
+	else {
+		char text[12];
+		char* end = appendNumber(text, rotation);
+		*end = '\0';
+		display->displayPopup(text, 0, true);
 	}
 }
 
@@ -427,6 +537,30 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 	// covers leaving the view, so the display it returns to isn't left with a stuck number.
 	if (on) {
 		display->cancelPopup();
+	}
+
+	// Pressing an encoder in makes turning it rotate that track's pattern
+	{
+		int32_t heldChannel = -1;
+		if (b == X_ENC) {
+			heldChannel = kChannelForHorizontalEncoder;
+		}
+		else if (b == Y_ENC) {
+			heldChannel = kChannelForVerticalEncoder;
+		}
+		else if (b == MOD_ENCODER_0) {
+			heldChannel = kChannelForModEncoder[0];
+		}
+		else if (b == MOD_ENCODER_1) {
+			heldChannel = kChannelForModEncoder[1];
+		}
+		if (heldChannel >= 0) {
+			encoderHeld_[heldChannel] = on;
+			if (!on) {
+				display->cancelPopup();
+			}
+			return ActionResult::DEALT_WITH;
+		}
 	}
 
 	// BACK, or SHIFT+CV again, returns to the normal Kit clip view
