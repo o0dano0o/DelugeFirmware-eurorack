@@ -19,6 +19,7 @@
 #include "definitions_cxx.hpp"
 #include "extern.h"
 #include "gui/colour/colour.h"
+#include "gui/menu_item/colour.h"
 #include "gui/ui/ui.h"
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/view.h"
@@ -436,8 +437,8 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 }
 
 ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
-	// Only act on presses on the step pads (not the sidebar)
-	if (!velocity || x >= kDisplayWidth) {
+	// Only act on presses. The audition column (right of the mute column) does nothing here.
+	if (!velocity || x > kDisplayWidth) {
 		return ActionResult::DEALT_WITH;
 	}
 
@@ -475,6 +476,13 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
 	ModelStackWithNoteRow* modelStack =
 	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	// Mute column: either row of a track toggles that track's mute
+	if (x == kDisplayWidth) {
+		clip->toggleNoteRowMute(modelStack);
+		uiNeedsRendering(this, 0, rowsForChannel(channel));
+		return ActionResult::DEALT_WITH;
+	}
 
 	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
 	if (step >= getNumSteps(modelStack, stepWidth)) {
@@ -605,11 +613,32 @@ bool EuclideanView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth 
 		return true;
 	}
 
+	InstrumentClip* clip = getCurrentInstrumentClip();
+
 	for (int32_t y = 0; y < kDisplayHeight; y++) {
-		if (whichRows & (1 << y)) {
-			std::fill(image[y] + kDisplayWidth, image[y] + kDisplayWidth + kSideBarWidth, colours::black);
-			if (occupancyMask) {
-				memset(occupancyMask[y] + kDisplayWidth, 0, kSideBarWidth);
+		if (!(whichRows & (1 << y))) {
+			continue;
+		}
+		std::fill(image[y] + kDisplayWidth, image[y] + kDisplayWidth + kSideBarWidth, colours::black);
+		if (occupancyMask) {
+			memset(occupancyMask[y] + kDisplayWidth, 0, kSideBarWidth);
+		}
+
+		// Mute pad (first sidebar column) for both rows of each track
+		for (int32_t c = 0; c < kNumGateTracks; c++) {
+			if (y != topRowForChannel(c) && y != bottomRowForChannel(c)) {
+				continue;
+			}
+			int32_t noteRowIndex;
+			NoteRow* noteRow = clip ? findGateRow(clip, c, noteRowIndex) : nullptr;
+			if (noteRow && noteRow->muted) {
+				image[y][kDisplayWidth] = menu_item::mutedColourMenu.getRGB();
+				if (occupancyMask) {
+					occupancyMask[y][kDisplayWidth] = 64;
+				}
+			}
+			else {
+				image[y][kDisplayWidth] = menu_item::activeColourMenu.getRGB();
 			}
 		}
 	}
