@@ -38,6 +38,7 @@
 #include "gui/ui/ui.h"
 #include "gui/ui_timer_manager.h"
 #include "gui/views/automation_view.h"
+#include "gui/views/euclidean_view.h"
 #include "gui/views/timeline_view.h"
 #include "gui/views/view.h"
 #include "hid/buttons.h"
@@ -503,6 +504,18 @@ ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bo
 					openUI(&soundEditor);
 				}
 			}
+		}
+	}
+
+	// SHIFT + Kit button, while in a Kit clip: open the Eurorack gate view showing all four gate tracks at once
+	else if (b == KIT && Buttons::isShiftButtonPressed() && currentUIMode == UI_MODE_NONE
+	         && getCurrentOutputType() == OutputType::KIT) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+
+			changeRootUI(&euclideanView);
 		}
 	}
 
