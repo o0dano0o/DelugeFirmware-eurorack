@@ -276,7 +276,7 @@ void ChaosEngine::updateOutputs(float dt) {
 
 	for (int32_t c = 0; c < kNumCVOutputs; c++) {
 		const int32_t code = static_cast<int32_t>(std::lround(cvVolts_[c] * static_cast<float>(kDacCodesPerVolt)));
-		cvCode_[c] = static_cast<uint16_t>(std::clamp(code, 0, kDacMaxCode));
+		cvCode_[c] = static_cast<uint16_t>(std::clamp(code, int32_t{0}, kDacMaxCode));
 	}
 }
 
