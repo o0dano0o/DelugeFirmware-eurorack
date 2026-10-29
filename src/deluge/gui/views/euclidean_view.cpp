@@ -178,6 +178,7 @@ void EuclideanView::focusRegained() {
 	for (bool& held : encoderHeld_) {
 		held = false;
 	}
+	heldPad_ = HeldPad{};
 
 	if (display->haveOLED()) {
 		renderUIsForOled();
@@ -346,7 +347,7 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 	for (int32_t i = 0; i < newHits; i++) {
 		Note* note = newNotes.getElement(i);
 		int32_t step = (int32_t)((uint32_t)(i * numSteps) / (uint32_t)newHits);
-		step = (step + rotation_[channel]) % numSteps; // Keep any rotation the user has dialled in
+		step = (step + noteRow->euclidRotation) % numSteps; // Keep any rotation the user has dialled in
 		note->pos = step * stepWidth;
 		note->length = stepWidth;
 		note->probability = noteRow->getDefaultProbability();
@@ -412,11 +413,11 @@ void EuclideanView::rotateTrack(int32_t channel, int32_t offset) {
 	int32_t numSteps = (uint32_t)(effectiveLength - 1) / stepWidth + 1; // Round up
 
 	int32_t numNotes = noteRow->notes.getNumElements();
-	int32_t newRotation = (((rotation_[channel] + offset) % numSteps) + numSteps) % numSteps;
+	int32_t newRotation = (((noteRow->euclidRotation + offset) % numSteps) + numSteps) % numSteps;
 	int32_t shift = (((offset % numSteps) + numSteps) % numSteps); // 0 .. numSteps-1, always forwards
 
 	if (numNotes == 0 || shift == 0) {
-		rotation_[channel] = newRotation;
+		noteRow->euclidRotation = newRotation;
 		showRotationPopup(channel, newRotation);
 		uiNeedsRendering(this, rowsForChannel(channel), 0); // The start marker moves even if there are no hits
 		return;
@@ -453,7 +454,7 @@ void EuclideanView::rotateTrack(int32_t channel, int32_t offset) {
 	}
 	noteRow->notes.swapStateWith(&newNotes);
 
-	rotation_[channel] = newRotation;
+	noteRow->euclidRotation = newRotation;
 	clip->expectEvent();
 
 	showRotationPopup(channel, newRotation);
@@ -579,8 +580,26 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 }
 
 ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
-	// Only act on presses. The audition column (right of the mute column) does nothing here.
-	if (!velocity || x > kDisplayWidth) {
+	// The audition column (right of the mute column) does nothing here.
+	if (x > kDisplayWidth) {
+		return ActionResult::DEALT_WITH;
+	}
+
+	// Letting go of a step pad. A hit that was only tapped (not turned for probability) is cleared now, so holding
+	// a hit to set its probability doesn't also delete it.
+	if (!velocity) {
+		if (x < kDisplayWidth && heldPad_.channel >= 0) {
+			HeldPad released = heldPad_;
+			heldPad_ = HeldPad{};
+			display->cancelPopup();
+			if (released.hadHit && !released.edited) {
+				if (sdRoutineLock) {
+					heldPad_ = released; // Try again outside the card routine
+					return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+				}
+				toggleStep(released.channel, released.step, true);
+			}
+		}
 		return ActionResult::DEALT_WITH;
 	}
 
@@ -631,8 +650,6 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 		return ActionResult::DEALT_WITH; // Beyond this track's length
 	}
 
-	int32_t stepStart = step * stepWidth;
-
 	// Is there already a gate event on this step?
 	bool hasHit = false;
 	for (int32_t i = 0; i < noteRow->notes.getNumElements(); i++) {
@@ -642,9 +659,38 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 		}
 	}
 
+	heldPad_.channel = channel;
+	heldPad_.step = step;
+	heldPad_.hadHit = hasHit;
+	heldPad_.edited = false;
+
+	// An empty step gets its hit straight away. An existing hit is left alone until the pad is released, so it can be
+	// held while turning the select knob to set its probability.
+	if (!hasHit) {
+		toggleStep(channel, step, false);
+	}
+	return ActionResult::DEALT_WITH;
+}
+
+void EuclideanView::toggleStep(int32_t channel, int32_t step, bool clear) {
+	InstrumentClip* clip = getCurrentInstrumentClip();
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
+	if (!noteRow) {
+		return;
+	}
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithNoteRow* modelStack =
+	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	int32_t stepStart = step * stepWidth;
+
 	Action* action = actionLogger.getNewAction(ActionType::NOTE_EDIT, ActionAddition::ALLOWED);
 
-	if (hasHit) {
+	if (clear) {
 		noteRow->clearArea(stepStart, stepWidth, modelStack, action, clip->getWrapEditLevel());
 	}
 	else {
@@ -654,8 +700,84 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	}
 
 	clip->expectEvent();
-	uiNeedsRendering(this, 1 << y, 0);
-	return ActionResult::DEALT_WITH;
+	uiNeedsRendering(this, 1 << ((step < kDisplayWidth) ? topRowForChannel(channel) : bottomRowForChannel(channel)), 0);
+}
+
+void EuclideanView::selectEncoderAction(int8_t offset) {
+	// Only does something while a hit's pad is held: it then sets that hit's probability, as in the normal clip view
+	if (heldPad_.channel < 0) {
+		return;
+	}
+
+	InstrumentClip* clip = getCurrentInstrumentClip();
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, heldPad_.channel, noteRowIndex);
+	if (!noteRow) {
+		return;
+	}
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	Note* note = nullptr;
+	for (int32_t i = 0; i < noteRow->notes.getNumElements(); i++) {
+		Note* candidate = noteRow->notes.getElement(i);
+		if ((uint32_t)candidate->pos / stepWidth == (uint32_t)heldPad_.step) {
+			note = candidate;
+			break;
+		}
+	}
+	if (!note) {
+		return; // Nothing on that step to give a probability to
+	}
+
+	// Probability is stored in 5% units (1-20). Anything above that is a "based on previous" variant, which this view
+	// doesn't offer, so it's treated as its plain percentage.
+	int32_t current = note->getProbability() & 127;
+	if (current > kNumProbabilityValues) {
+		current = kNumProbabilityValues;
+	}
+	int32_t updated = std::clamp<int32_t>(current + offset, 1, kNumProbabilityValues);
+
+	if (updated != current) {
+		Action* action = actionLogger.getNewAction(ActionType::NOTE_EDIT, ActionAddition::ALLOWED);
+		if (action) {
+			action->recordNoteArrayChangeIfNotAlreadySnapshotted(clip, clip->getNoteRowId(noteRow, noteRowIndex),
+			                                                     &noteRow->notes, false);
+		}
+		// The array may have been snapshotted (and its data moved), so look the note up again
+		for (int32_t i = 0; i < noteRow->notes.getNumElements(); i++) {
+			Note* candidate = noteRow->notes.getElement(i);
+			if ((uint32_t)candidate->pos / stepWidth == (uint32_t)heldPad_.step) {
+				candidate->setProbability(updated);
+				break;
+			}
+		}
+		clip->expectEvent();
+		uiNeedsRendering(this,
+		                 1 << ((heldPad_.step < kDisplayWidth) ? topRowForChannel(heldPad_.channel)
+		                                                       : bottomRowForChannel(heldPad_.channel)),
+		                 0);
+	}
+
+	heldPad_.edited = true;
+	showProbabilityPopup(updated);
+}
+
+void EuclideanView::showProbabilityPopup(int32_t probability) {
+	char text[32];
+	if (display->haveOLED()) {
+		char* end = text;
+		memcpy(end, "Probability ", 12);
+		end += 12;
+		end = appendNumber(end, probability * 5);
+		*end++ = '%';
+		*end = '\0';
+		display->popupText(text, PopupType::PROBABILITY);
+	}
+	else {
+		char* end = appendNumber(text, probability * 5);
+		*end = '\0';
+		display->displayPopup(text, 0, true, 255, 1, PopupType::PROBABILITY);
+	}
 }
 
 ActionResult EuclideanView::horizontalEncoderAction(int32_t offset) {
@@ -723,10 +845,16 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 
 	// Which steps hold a gate event
 	uint32_t hits = 0;
+	int32_t probabilities[kMaxSteps];
+	for (int32_t& probability : probabilities) {
+		probability = kNumProbabilityValues;
+	}
 	for (int32_t i = 0; i < noteRow->notes.getNumElements(); i++) {
-		uint32_t step = (uint32_t)noteRow->notes.getElement(i)->pos / stepWidth;
+		Note* note = noteRow->notes.getElement(i);
+		uint32_t step = (uint32_t)note->pos / stepWidth;
 		if (step < (uint32_t)kMaxSteps) {
 			hits |= (1u << step);
+			probabilities[step] = std::min<int32_t>(note->getProbability() & 127, kNumProbabilityValues);
 		}
 	}
 
@@ -735,7 +863,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 	// The pattern's start point is tinted a different shade. It moves with the rotation (it's where the un-rotated
 	// step 1 has been carried to), so you can see where the rhythm begins. Its empty state is a touch brighter than
 	// other empty steps so it shows even when there's no hit on it.
-	int32_t startStep = rotation_[channel] % std::max<int32_t>(numSteps, 1);
+	int32_t startStep = noteRow->euclidRotation % std::max<int32_t>(numSteps, 1);
 	RGB startColour = RGB::fromHue(channel * 48 + 24);
 	RGB startEmpty = startColour.dim(2);
 	int32_t playheadStep = getPlayheadStep(clip, channel);
@@ -750,6 +878,11 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 		RGB pad = isHit ? colour : empty;
 		if (step == startStep) {
 			pad = isHit ? startColour : startEmpty;
+		}
+		// A hit that won't always fire is shown dimmer, in proportion to its chance
+		if (isHit && probabilities[step] < kNumProbabilityValues) {
+			RGB faint = pad.dim(2);
+			pad = RGB::blend(faint, pad, (uint16_t)(probabilities[step] * 65535 / kNumProbabilityValues));
 		}
 		if (step == playheadStep) {
 			pad = isHit ? colours::white : RGB::monochrome(60);

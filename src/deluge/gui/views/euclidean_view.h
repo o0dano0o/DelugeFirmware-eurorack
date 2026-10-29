@@ -73,7 +73,7 @@ public:
 	ActionResult horizontalEncoderAction(int32_t offset) override;
 	ActionResult verticalEncoderAction(int32_t offset, bool inCardRoutine) override;
 	void modEncoderAction(int32_t whichModEncoder, int32_t offset) override;
-	void selectEncoderAction(int8_t offset) override {}
+	void selectEncoderAction(int8_t offset) override;
 
 private:
 	/// Makes sure the current Kit clip has a gate row for each of gate outputs 1-4, creating any that are missing so
@@ -118,8 +118,20 @@ private:
 	/// Whether each track's encoder is currently pressed in (turning it then rotates the pattern)
 	bool encoderHeld_[kNumGateTracks] = {false, false, false, false};
 
-	/// How many steps each track's pattern has been rotated by, so changing the hit count keeps the rotation
-	int32_t rotation_[kNumGateTracks] = {0, 0, 0, 0};
+	/// The step pad currently held down, if any. Holding a hit and turning the select knob sets that hit's probability;
+	/// `edited` records that it was turned, so letting go doesn't also clear the hit.
+	struct HeldPad {
+		int32_t channel = -1;
+		int32_t step = 0;
+		bool hadHit = false;
+		bool edited = false;
+	};
+	HeldPad heldPad_;
+
+	/// Sets or clears the gate event on one step, with undo support
+	void toggleStep(int32_t channel, int32_t step, bool clear);
+
+	void showProbabilityPopup(int32_t probability);
 };
 
 extern EuclideanView euclideanView;

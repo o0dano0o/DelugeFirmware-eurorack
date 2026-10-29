@@ -148,6 +148,9 @@ public:
 	uint8_t probabilityValue;
 	Iterance iteranceValue;
 	uint8_t fillValue;
+	/// How many steps the Euclidean view has rotated this row's pattern by (UI state only, saved so it survives
+	/// reloads)
+	uint8_t euclidRotation;
 	// These are deprecated, and only used during loading for compatibility with old song files
 	LearnedMIDI muteMIDICommand;
 	LearnedMIDI midiInput;
