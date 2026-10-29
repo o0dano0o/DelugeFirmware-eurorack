@@ -208,10 +208,13 @@ int32_t EuclideanView::getPlayheadStep(InstrumentClip* clip, int32_t channel) {
 	ModelStackWithNoteRow* modelStack =
 	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
 
-	int32_t pos = modelStack->getLastProcessedPos();
-	if (pos < 0) {
+	// The live position is the one the normal clip view draws its playheads from: it includes the ticks elapsed
+	// since the last processed tick, so the dot moves smoothly and doesn't lag or skip steps between ticks.
+	int32_t length = modelStack->getLoopLength();
+	if (length <= 0) {
 		return -1;
 	}
+	int32_t pos = (int32_t)(noteRow->getLivePos(modelStack) % (uint32_t)length);
 
 	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
 	int32_t numSteps = getNumSteps(modelStack, stepWidth);
