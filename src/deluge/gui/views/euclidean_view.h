@@ -36,10 +36,12 @@ class ModelStackWithTimelineCounter;
 /// Controls (see the mapping constants in euclidean_view.cpp to change them):
 ///   upper gold knob -> gate 1 length     lower gold knob      -> gate 2 length
 ///   horizontal <>   -> gate 3 length     vertical (up/down)   -> gate 4 length
+///   pattern pads    -> toggle a gate event on that step
 ///   BACK            -> return to the Kit clip view
 ///
-/// Enter from a Kit clip with SHIFT + KIT. Any of the four gate rows the Kit doesn't have yet are created
-/// automatically on entry, so no manual gate setup is needed.
+/// Enter from any instrument clip with SHIFT + CV (a clip that isn't a Kit is turned into one), or from a Kit clip
+/// with SHIFT + KIT. Any of the four gate rows the Kit doesn't have yet are created automatically on entry, so no
+/// manual gate setup is needed. Tapping a pattern pad adds or removes a gate event on that step.
 class EuclideanView final : public ClipView {
 public:
 	EuclideanView() = default;

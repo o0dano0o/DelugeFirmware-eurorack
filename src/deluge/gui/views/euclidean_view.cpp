@@ -17,6 +17,7 @@
 
 #include "gui/views/euclidean_view.h"
 #include "definitions_cxx.hpp"
+#include "extern.h"
 #include "gui/colour/colour.h"
 #include "gui/ui/ui.h"
 #include "gui/views/instrument_clip_view.h"
@@ -324,7 +325,67 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 }
 
 ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
-	// Pads aren't used for editing yet; edit the pattern itself in the Kit clip view
+	// Only act on presses, and only on the pattern pads (not the sidebar or playhead rows)
+	if (!velocity || x >= kDisplayWidth) {
+		return ActionResult::DEALT_WITH;
+	}
+
+	int32_t channel = -1;
+	for (int32_t c = 0; c < kNumGateTracks; c++) {
+		if (y == patternRowForChannel(c)) {
+			channel = c;
+			break;
+		}
+	}
+	if (channel < 0) {
+		return ActionResult::DEALT_WITH;
+	}
+
+	if (sdRoutineLock) {
+		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+	}
+
+	InstrumentClip* clip = getCurrentInstrumentClip();
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
+	if (!noteRow) {
+		return ActionResult::DEALT_WITH;
+	}
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithNoteRow* modelStack =
+	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	if (x >= getNumSteps(modelStack, stepWidth)) {
+		return ActionResult::DEALT_WITH; // Beyond this track's length
+	}
+
+	int32_t stepStart = x * stepWidth;
+
+	// Is there already a gate event on this step?
+	bool hasHit = false;
+	for (int32_t i = 0; i < noteRow->notes.getNumElements(); i++) {
+		if ((uint32_t)noteRow->notes.getElement(i)->pos / stepWidth == (uint32_t)x) {
+			hasHit = true;
+			break;
+		}
+	}
+
+	Action* action = actionLogger.getNewAction(ActionType::NOTE_EDIT, ActionAddition::ALLOWED);
+
+	if (hasHit) {
+		noteRow->clearArea(stepStart, stepWidth, modelStack, action, clip->getWrapEditLevel());
+	}
+	else {
+		noteRow->attemptNoteAdd(stepStart, stepWidth, static_cast<Instrument*>(clip->output)->defaultVelocity,
+		                        noteRow->getDefaultProbability(), noteRow->getDefaultIterance(),
+		                        noteRow->getDefaultFill(modelStack), modelStack, action);
+	}
+
+	clip->expectEvent();
+	uiNeedsRendering(this, 1 << y, 0);
 	return ActionResult::DEALT_WITH;
 }
 

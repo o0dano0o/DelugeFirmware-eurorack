@@ -574,6 +574,20 @@ ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bo
 		}
 	}
 
+	// SHIFT + CV: turn this clip into a four-gate "Euclid" clip and open the Euclidean view. A clip that isn't a Kit
+	// yet becomes one first; the view then creates the gate rows itself.
+	else if (b == CV && Buttons::isShiftButtonPressed() && currentUIMode == UI_MODE_NONE) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+
+			if (getCurrentOutputType() == OutputType::KIT || changeOutputType(OutputType::KIT)) {
+				changeRootUI(&euclideanView);
+			}
+		}
+	}
+
 	else if (b == CV) {
 		if (on) {
 			if (inCardRoutine) {
