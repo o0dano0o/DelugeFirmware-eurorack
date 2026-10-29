@@ -689,10 +689,9 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		}
 	}
 
-	// Temporary switches while the chaos UI is built. Select encoder: cycles chaos off, CV only, CV and gates.
-	// SHIFT + select encoder: free time / tempo sync.
+	// Select encoder press: all outputs to chaos, or all back to the Euclidean tracks.
+	// SHIFT + select encoder press: free time / tempo sync.
 	if (b == SELECT_ENC && on) {
-		using deluge::chaos::runner::Mode;
 		char const* text;
 		if (Buttons::isShiftButtonPressed()) {
 			bool sync = !deluge::chaos::runner::isTempoSync();
@@ -700,22 +699,10 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 			text = sync ? "Chaos tempo sync" : "Chaos free time";
 		}
 		else {
-			Mode next = Mode::OFF;
-			switch (deluge::chaos::runner::getMode()) {
-			case Mode::OFF:
-				next = Mode::CV;
-				text = "Chaos CV";
-				break;
-			case Mode::CV:
-				next = Mode::CV_AND_GATES;
-				text = "Chaos CV and gates";
-				break;
-			default:
-				next = Mode::OFF;
-				text = "Chaos off";
-				break;
-			}
-			deluge::chaos::runner::setMode(next);
+			bool enable = !deluge::chaos::runner::isActive();
+			deluge::chaos::runner::setAll(enable);
+			text = enable ? "All outputs chaos" : "Chaos off";
+			refreshAll();
 		}
 		if (display->haveOLED()) {
 			display->popupTextTemporary(text);
@@ -807,6 +794,33 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 		}
 	}
 	if (channel < 0) {
+		return ActionResult::DEALT_WITH;
+	}
+
+	// SHIFT + mute pad: switch the track's gate (upper pad) or, for tracks 1 and 2, its CV (lower pad) between the
+	// Euclidean pattern and chaos
+	if (x == kDisplayWidth && Buttons::isShiftButtonPressed()) {
+		char text[24];
+		if (y == topRowForChannel(channel)) {
+			bool chaos = !deluge::chaos::runner::isGateChaos(channel);
+			deluge::chaos::runner::setGateChaos(channel, chaos);
+			snprintf(text, sizeof(text), "Gate %d %s", static_cast<int>(channel + 1), chaos ? "chaos" : "euclid");
+		}
+		else if (channel < deluge::chaos::kNumCVOutputs) {
+			bool chaos = !deluge::chaos::runner::isCVChaos(channel);
+			deluge::chaos::runner::setCVChaos(channel, chaos);
+			snprintf(text, sizeof(text), "CV %d %s", static_cast<int>(channel + 1), chaos ? "chaos" : "euclid");
+		}
+		else {
+			return ActionResult::DEALT_WITH;
+		}
+		if (display->haveOLED()) {
+			display->popupTextTemporary(text);
+		}
+		else {
+			display->setScrollingText(text);
+		}
+		refreshAll();
 		return ActionResult::DEALT_WITH;
 	}
 
@@ -1124,6 +1138,19 @@ bool EuclideanView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth 
 				image[y][kDisplayWidth] = menu_item::activeColourMenu.getRGB();
 			}
 
+			// Chaos indicators override the mute pad: the upper pad shows the gate (bright while it is high), the lower
+			// pad of tracks 1 and 2 shows the CV level
+			if (y == topRowForChannel(c) && deluge::chaos::runner::isGateChaos(c)) {
+				bool high = deluge::chaos::runner::engine().getGateLevels() & (1 << c);
+				image[y][kDisplayWidth] = RGB{static_cast<uint8_t>(high ? 255 : 40), 0, static_cast<uint8_t>(high ? 255 : 60)};
+			}
+			else if (y == bottomRowForChannel(c) && c < deluge::chaos::kNumCVOutputs
+			         && deluge::chaos::runner::isCVChaos(c)) {
+				float level = deluge::chaos::runner::engine().getCVVolts(c) / 10.0f;
+				uint8_t v = static_cast<uint8_t>(30 + 225 * std::max(0.0f, std::min(level, 1.0f)));
+				image[y][kDisplayWidth] = RGB{0, v, v};
+			}
+
 			// Page pad (second sidebar column): upper pad = steps 1-32, lower pad = steps 33-64, lit for the page
 			// showing
 			int32_t padPage = (y == topRowForChannel(c)) ? 0 : 1;
@@ -1151,6 +1178,19 @@ void EuclideanView::graphicsRoutine() {
 
 	if (rowsToRedraw) {
 		uiNeedsRendering(this, rowsToRedraw, 0);
+	}
+
+	// Chaos indicators in the mute column: redraw when a gate flips or a CV level moves a step
+	if (deluge::chaos::runner::isActive()) {
+		auto& chaosEngine = deluge::chaos::runner::engine();
+		uint32_t signature = chaosEngine.getGateLevels();
+		for (int32_t cv = 0; cv < deluge::chaos::kNumCVOutputs; cv++) {
+			signature |= static_cast<uint32_t>(chaosEngine.getCVVolts(cv) * 1.6f) << (8 + 4 * cv);
+		}
+		if (signature != lastChaosSignature_) {
+			lastChaosSignature_ = signature;
+			uiNeedsRendering(this, 0, 0xFF);
+		}
 	}
 }
 

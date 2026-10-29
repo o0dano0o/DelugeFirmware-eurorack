@@ -34,7 +34,8 @@ constexpr float kFreePeriods[kNumSloths] = {12.0f, 30.0f, 90.0f};
 constexpr float kTempoPeriods[kNumSloths] = {18.0f, 45.0f, 135.0f};
 
 ChaosEngine chaosEngine;
-Mode mode = Mode::OFF;
+uint8_t gateMask = 0; ///< bit g set: gate g is driven by chaos rule g
+uint8_t cvMask = 0;   ///< bit c set: CV c is driven by chaos
 bool tempoSync = false;
 uint32_t lastSampleTimer = 0;
 float pendingSeconds = 0.0f;
@@ -49,17 +50,39 @@ float currentBpm() {
 
 void writeOutputs() {
 	for (uint8_t ch = 0; ch < kNumCVOutputs; ch++) {
-		cvEngine.sendChaosVoltage(ch, chaosEngine.getCVCode(ch));
-	}
-	if (mode == Mode::CV_AND_GATES) {
-		uint8_t gates = chaosEngine.getGateLevels();
-		uint8_t changed = gates ^ lastGates;
-		lastGates = gates;
-		for (uint8_t g = 0; g < kNumGateRules; g++) {
-			if (changed & (1 << g)) {
-				cvEngine.sendChaosGate(g, gates & (1 << g));
-			}
+		if (cvMask & (1 << ch)) {
+			cvEngine.sendChaosVoltage(ch, chaosEngine.getCVCode(ch));
 		}
+	}
+	uint8_t gates = chaosEngine.getGateLevels();
+	uint8_t changed = gates ^ lastGates;
+	lastGates = gates;
+	for (uint8_t g = 0; g < kNumGateRules; g++) {
+		if (changed & (1 << g)) {
+			cvEngine.sendChaosGate(g, gates & (1 << g));
+		}
+	}
+}
+
+/// Hands the masks to the CV engine. Starts the chaos running if this is the first output to use it.
+void apply(bool wasActive) {
+	uint8_t oldGates = cvEngine.getChaosOwnedGates();
+	cvEngine.setChaosOwnedCV(cvMask);
+	cvEngine.setChaosOwnedGates(gateMask);
+	// gates the CV engine refused (run/clock) aren't ours
+	gateMask = cvEngine.getChaosOwnedGates();
+
+	if (!wasActive && (cvMask || gateMask)) {
+		chaosEngine.reset();
+		lastSampleTimer = AudioEngine::audioSampleTimer;
+		pendingSeconds = 0.0f;
+		chaosEngine.step(kStepSeconds, currentBpm());
+		lastGates = 0;
+	}
+	// a newly owned gate must be sent its current level
+	lastGates &= oldGates;
+	if (cvMask || gateMask) {
+		writeOutputs();
 	}
 }
 } // namespace
@@ -72,8 +95,41 @@ ChaosEngine& engine() {
 	return chaosEngine;
 }
 
-Mode getMode() {
-	return mode;
+bool isActive() {
+	return cvMask || gateMask;
+}
+
+bool isGateChaos(int32_t gate) {
+	return gateMask & (1 << gate);
+}
+
+bool isCVChaos(int32_t cv) {
+	return cvMask & (1 << cv);
+}
+
+void setGateChaos(int32_t gate, bool chaos) {
+	if (gate < 0 || gate >= kNumGateRules) {
+		return;
+	}
+	bool was = isActive();
+	gateMask = chaos ? (gateMask | (1 << gate)) : (gateMask & ~(1 << gate));
+	apply(was);
+}
+
+void setCVChaos(int32_t cv, bool chaos) {
+	if (cv < 0 || cv >= kNumCVOutputs) {
+		return;
+	}
+	bool was = isActive();
+	cvMask = chaos ? (cvMask | (1 << cv)) : (cvMask & ~(1 << cv));
+	apply(was);
+}
+
+void setAll(bool chaos) {
+	bool was = isActive();
+	gateMask = chaos ? 0b1111 : 0;
+	cvMask = chaos ? 0b11 : 0;
+	apply(was);
 }
 
 bool isTempoSync() {
@@ -91,40 +147,8 @@ void setTempoSync(bool sync) {
 	}
 }
 
-void setMode(Mode newMode) {
-	if (newMode == mode) {
-		return;
-	}
-	bool wasOff = (mode == Mode::OFF);
-	mode = newMode;
-
-	if (newMode == Mode::OFF) {
-		cvEngine.setChaosOwnedGates(0);
-		cvEngine.setChaosOwnedCV(0);
-		return;
-	}
-
-	if (wasOff) {
-		chaosEngine.reset();
-		lastSampleTimer = AudioEngine::audioSampleTimer;
-		pendingSeconds = 0.0f;
-		cvEngine.setChaosOwnedCV(0b11);
-		chaosEngine.step(kStepSeconds, currentBpm());
-	}
-
-	if (newMode == Mode::CV_AND_GATES) {
-		cvEngine.setChaosOwnedGates(0b1111);
-		// start from a known state: every owned gate low, then bring up whichever rules are high
-		lastGates = 0;
-	}
-	else {
-		cvEngine.setChaosOwnedGates(0);
-	}
-	writeOutputs();
-}
-
 void playbackBegun() {
-	if (mode == Mode::OFF) {
+	if (!isActive()) {
 		return;
 	}
 	chaosEngine.reset();
@@ -133,7 +157,7 @@ void playbackBegun() {
 }
 
 void tick() {
-	if (mode == Mode::OFF) {
+	if (!isActive()) {
 		return;
 	}
 	uint32_t now = AudioEngine::audioSampleTimer;

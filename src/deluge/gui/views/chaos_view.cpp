@@ -64,8 +64,9 @@ RGB scaled(RGB c, float k) {
 } // namespace
 
 bool ChaosView::opened() {
-	if (runner::getMode() == runner::Mode::OFF) {
-		runner::setMode(runner::Mode::CV);
+	if (!runner::isActive()) {
+		runner::setCVChaos(0, true);
+		runner::setCVChaos(1, true);
 	}
 	focusRegained();
 	return true;

@@ -41,6 +41,8 @@ class ModelStackWithTimelineCounter;
 ///   hold SHIFT while turning it -> that track's length in steps
 ///   pattern pads    -> toggle a gate event on that step
 ///   BACK            -> return to the Kit clip view
+///   SHIFT + mute pad -> switch that track's gate (upper pad) or CV (lower pad, tracks 1 and 2) to chaos or back
+///   CV button       -> chaos pad view
 ///
 /// Enter from any instrument clip with SHIFT + CV (a clip that isn't a Kit is turned into one) and leave with BACK or
 /// SHIFT + CV again. Any of the four gate rows the Kit doesn't have yet are created automatically on entry, so no
@@ -132,6 +134,9 @@ private:
 
 	/// Which page of steps is showing (all four tracks page together)
 	int32_t page_ = 0;
+
+	/// Gate levels and CV bar heights as last drawn in the mute column's chaos indicators
+	uint32_t lastChaosSignature_ = 0;
 
 	/// The pad row showing `step` of `channel` on the current page, or -1 if that step is on another page
 	int32_t rowForStep(int32_t channel, int32_t step) const;

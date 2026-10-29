@@ -36,7 +36,7 @@
 ///   lower gold knob      -> sloth C period      upper gold knob     -> coupling
 ///   BACK                 -> return to the Euclidean view
 ///
-/// Entered with the CV button from the Euclidean view. Opening it switches chaos on (CV only) if it was off.
+/// Entered with the CV button from the Euclidean view. Opening it switches CV 1 and CV 2 to chaos if nothing was using chaos.
 class ChaosView final : public ClipView {
 public:
 	ChaosView() = default;

@@ -23,15 +23,16 @@
 /// result to the CV outputs and, optionally, the gates (gate N follows rule N).
 namespace deluge::chaos::runner {
 
-enum class Mode : uint8_t {
-	OFF,
-	CV,          ///< chaos drives CV 1 and CV 2
-	CV_AND_GATES ///< ... and gates 1 to 4 (except any set to a special function) follow gate rules 1 to 4
-};
-
-/// Chaos takes over (or hands back) the outputs for the given mode
-void setMode(Mode mode);
-Mode getMode();
+/// Which source drives each output. By default gate N follows chaos gate rule N. Switching a gate or CV to chaos
+/// silences whatever else was driving it (the Euclidean pattern stays in the clip and comes back when switched back).
+void setGateChaos(int32_t gate, bool chaos);
+bool isGateChaos(int32_t gate);
+void setCVChaos(int32_t cv, bool chaos);
+bool isCVChaos(int32_t cv);
+/// Everything to chaos (CV 1, CV 2, gates 1 to 4), or everything back to normal
+void setAll(bool chaos);
+/// Whether any output is driven by chaos
+bool isActive();
 
 /// Free time: periods in seconds. Tempo time: periods in beats, so the chaos follows the song's tempo.
 void setTempoSync(bool sync);
