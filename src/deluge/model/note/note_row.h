@@ -151,6 +151,8 @@ public:
 	/// How many steps the Euclidean view has rotated this row's pattern by (UI state only, saved so it survives
 	/// reloads)
 	uint8_t euclidRotation;
+	/// Empty steps the Euclidean view leaves at the end of this row's pattern (so hits spread over the rest)
+	uint8_t euclidPadding;
 	// These are deprecated, and only used during loading for compatibility with old song files
 	LearnedMIDI muteMIDICommand;
 	LearnedMIDI midiInput;

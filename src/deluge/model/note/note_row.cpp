@@ -61,6 +61,7 @@ NoteRow::NoteRow(int16_t newY) {
 	iteranceValue = kDefaultIteranceValue;
 	fillValue = FillMode::OFF;
 	euclidRotation = 0;
+	euclidPadding = 0;
 	loopLengthIfIndependent = 0;
 	sequenceDirectionMode = SequenceDirection::OBEY_PARENT;
 	exportStem = false;
@@ -3205,6 +3206,11 @@ Error NoteRow::readFromFile(Deserializer& reader, int32_t* minY, InstrumentClip*
 			muted = reader.readTagOrAttributeValueInt();
 		}
 
+		else if (!strcmp(tagName, "euclidPadding")) {
+			int32_t padding = reader.readTagOrAttributeValueInt();
+			euclidPadding = (padding < 0) ? 0 : (padding > 255 ? 255 : padding);
+		}
+
 		else if (!strcmp(tagName, "euclidRotation")) {
 			int32_t rotation = reader.readTagOrAttributeValueInt();
 			euclidRotation = (rotation < 0) ? 0 : (rotation > 255 ? 255 : rotation);
@@ -3572,6 +3578,9 @@ void NoteRow::writeToFile(Serializer& writer, int32_t drumIndex, InstrumentClip*
 	}
 	if (euclidRotation) {
 		writer.writeAttribute("euclidRotation", euclidRotation);
+	}
+	if (euclidPadding) {
+		writer.writeAttribute("euclidPadding", euclidPadding);
 	}
 	if (sequenceDirectionMode != SequenceDirection::OBEY_PARENT) {
 		writer.writeAttribute("sequenceDirection", sequenceDirectionModeToString(sequenceDirectionMode));

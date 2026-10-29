@@ -94,6 +94,18 @@ private:
 	/// (a Euclidean rhythm), with undo support
 	void editTrackHits(int32_t channel, int32_t offset);
 
+	/// Number of steps the Euclidean pattern itself spans: the track length less its padding (always at least 1)
+	int32_t getPatternSpan(NoteRow* noteRow, int32_t numSteps);
+
+	/// Replaces a track's gate events with `newHits` evenly spread across its pattern span (honouring its rotation),
+	/// with undo support. Everything else about the editing popups is left to the caller.
+	void applyPattern(int32_t channel, int32_t newHits);
+
+	/// Changes how many empty steps are left at the end of a track's pattern, respacing its hits over the rest
+	void editTrackPadding(int32_t channel, int32_t offset);
+
+	void showPaddingPopup(int32_t channel, int32_t padding);
+
 	/// Rotates one track's pattern by `offset` steps (wrapping around its length), with undo support
 	void rotateTrack(int32_t channel, int32_t offset);
 

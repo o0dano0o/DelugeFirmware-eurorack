@@ -309,7 +309,41 @@ void EuclideanView::editTrackLength(int32_t channel, int32_t offset) {
 	uiNeedsRendering(this, rowsForChannel(channel), 0);
 }
 
+int32_t EuclideanView::getPatternSpan(NoteRow* noteRow, int32_t numSteps) {
+	int32_t padding = std::min<int32_t>(noteRow->euclidPadding, std::max<int32_t>(numSteps - 1, 0));
+	return std::max<int32_t>(numSteps - padding, 1);
+}
+
 void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
+	InstrumentClip* clip = getCurrentInstrumentClip();
+
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
+	if (!noteRow) {
+		return;
+	}
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithNoteRow* modelStack =
+	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	int32_t numSteps = (uint32_t)(modelStack->getLoopLength() - 1) / stepWidth + 1; // Round up
+	int32_t span = getPatternSpan(noteRow, numSteps);
+
+	int32_t oldHits = noteRow->notes.getNumElements();
+	int32_t newHits = std::clamp<int32_t>(oldHits + offset, 0, span);
+	if (newHits == oldHits) {
+		showHitsPopup(channel, oldHits, std::min(span, kMaxSteps));
+		return;
+	}
+
+	applyPattern(channel, newHits);
+	showHitsPopup(channel, newHits, std::min(span, kMaxSteps));
+}
+
+void EuclideanView::applyPattern(int32_t channel, int32_t newHits) {
 	InstrumentClip* clip = getCurrentInstrumentClip();
 
 	int32_t noteRowIndex;
@@ -326,13 +360,8 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
 	int32_t effectiveLength = modelStack->getLoopLength();
 	int32_t numSteps = (uint32_t)(effectiveLength - 1) / stepWidth + 1; // Round up
-
-	int32_t oldHits = noteRow->notes.getNumElements();
-	int32_t newHits = std::clamp<int32_t>(oldHits + offset, 0, numSteps);
-	if (newHits == oldHits) {
-		showHitsPopup(channel, oldHits, std::min(numSteps, kMaxSteps));
-		return;
-	}
+	int32_t span = getPatternSpan(noteRow, numSteps);
+	newHits = std::clamp<int32_t>(newHits, 0, span);
 
 	// Build the new, evenly spread set of gate events up front so nothing can fail halfway through
 	NoteVector newNotes;
@@ -346,8 +375,8 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 
 	for (int32_t i = 0; i < newHits; i++) {
 		Note* note = newNotes.getElement(i);
-		int32_t step = (int32_t)((uint32_t)(i * numSteps) / (uint32_t)newHits);
-		step = (step + noteRow->euclidRotation) % numSteps; // Keep any rotation the user has dialled in
+		int32_t step = (int32_t)((uint32_t)(i * span) / (uint32_t)newHits);
+		step = (step + noteRow->euclidRotation) % span; // Keep any rotation the user has dialled in
 		note->pos = step * stepWidth;
 		note->length = stepWidth;
 		note->probability = noteRow->getDefaultProbability();
@@ -377,14 +406,74 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 	noteRow->notes.swapStateWith(&newNotes);
 
 	clip->expectEvent();
-
-	showHitsPopup(channel, newHits, std::min(numSteps, kMaxSteps));
 	uiNeedsRendering(this, rowsForChannel(channel), 0);
+}
+
+void EuclideanView::editTrackPadding(int32_t channel, int32_t offset) {
+	InstrumentClip* clip = getCurrentInstrumentClip();
+
+	int32_t noteRowIndex;
+	NoteRow* noteRow = findGateRow(clip, channel, noteRowIndex);
+	if (!noteRow) {
+		return;
+	}
+
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStackWithClip = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithNoteRow* modelStack =
+	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
+
+	uint32_t stepWidth = currentSong->xZoom[NAVIGATION_CLIP];
+	int32_t numSteps = (uint32_t)(modelStack->getLoopLength() - 1) / stepWidth + 1; // Round up
+
+	// At least one step must be left for the pattern itself
+	int32_t oldPadding = std::min<int32_t>(noteRow->euclidPadding, std::max<int32_t>(numSteps - 1, 0));
+	int32_t newPadding = std::clamp<int32_t>(oldPadding + offset, 0, std::max<int32_t>(numSteps - 1, 0));
+	if (newPadding == oldPadding) {
+		showPaddingPopup(channel, oldPadding);
+		return;
+	}
+
+	noteRow->euclidPadding = newPadding;
+	int32_t span = getPatternSpan(noteRow, numSteps);
+	noteRow->euclidRotation = noteRow->euclidRotation % span;
+
+	// Respace the same number of hits over the shorter (or longer) pattern span
+	applyPattern(channel, std::min<int32_t>(noteRow->notes.getNumElements(), span));
+	showPaddingPopup(channel, newPadding);
+	uiNeedsRendering(this, rowsForChannel(channel), 0);
+}
+
+void EuclideanView::showPaddingPopup(int32_t channel, int32_t padding) {
+	if (display->haveOLED()) {
+		char text[32];
+		char* end = text;
+		memcpy(end, "Gate ", 5);
+		end += 5;
+		end = appendNumber(end, channel + 1);
+		memcpy(end, ": padding ", 10);
+		end += 10;
+		end = appendNumber(end, padding);
+		*end = '\0';
+		display->popupTextTemporary(text);
+	}
+	else {
+		char text[12];
+		char* end = appendNumber(text, padding);
+		*end = '\0';
+		display->displayPopup(text, 0, true);
+	}
 }
 
 void EuclideanView::encoderTurned(int32_t channel, int32_t offset) {
 	if (encoderHeld_[channel]) {
-		rotateTrack(channel, offset);
+		// Encoder pressed in: turn to rotate the pattern, or hold SHIFT as well to change its padding
+		if (Buttons::isShiftButtonPressed()) {
+			editTrackPadding(channel, offset);
+		}
+		else {
+			rotateTrack(channel, offset);
+		}
 	}
 	else if (Buttons::isShiftButtonPressed()) {
 		editTrackLength(channel, offset);
@@ -412,9 +501,12 @@ void EuclideanView::rotateTrack(int32_t channel, int32_t offset) {
 	int32_t effectiveLength = modelStack->getLoopLength();
 	int32_t numSteps = (uint32_t)(effectiveLength - 1) / stepWidth + 1; // Round up
 
+	// Only the pattern itself rotates; any padding at the end stays put
+	int32_t span = getPatternSpan(noteRow, numSteps);
+
 	int32_t numNotes = noteRow->notes.getNumElements();
-	int32_t newRotation = (((noteRow->euclidRotation + offset) % numSteps) + numSteps) % numSteps;
-	int32_t shift = (((offset % numSteps) + numSteps) % numSteps); // 0 .. numSteps-1, always forwards
+	int32_t newRotation = (((noteRow->euclidRotation + offset) % span) + span) % span;
+	int32_t shift = (((offset % span) + span) % span); // 0 .. span-1, always forwards
 
 	if (numNotes == 0 || shift == 0) {
 		noteRow->euclidRotation = newRotation;
@@ -435,7 +527,9 @@ void EuclideanView::rotateTrack(int32_t channel, int32_t offset) {
 		Note* dest = newNotes.getElement(i);
 		*dest = *noteRow->notes.getElement(i);
 		int32_t step = (int32_t)((uint32_t)dest->pos / stepWidth);
-		step = (step + shift) % numSteps;
+		if (step < span) {
+			step = (step + shift) % span;
+		}
 		dest->pos = step * stepWidth;
 	}
 	sortNotesByPos(newNotes);
@@ -863,7 +957,8 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 	// The pattern's start point is tinted a different shade. It moves with the rotation (it's where the un-rotated
 	// step 1 has been carried to), so you can see where the rhythm begins. Its empty state is a touch brighter than
 	// other empty steps so it shows even when there's no hit on it.
-	int32_t startStep = noteRow->euclidRotation % std::max<int32_t>(numSteps, 1);
+	int32_t span = getPatternSpan(noteRow, numSteps);
+	int32_t startStep = noteRow->euclidRotation % span;
 	RGB startColour = RGB::fromHue(channel * 48 + 24);
 	RGB startEmpty = startColour.dim(2);
 	int32_t playheadStep = getPlayheadStep(clip, channel);
@@ -876,6 +971,9 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 
 		bool isHit = hits & (1u << step);
 		RGB pad = isHit ? colour : empty;
+		if (step >= span && !isHit) {
+			pad = colour.dim(5); // Padding: part of the track, but outside the Euclidean pattern
+		}
 		if (step == startStep) {
 			pad = isHit ? startColour : startEmpty;
 		}
