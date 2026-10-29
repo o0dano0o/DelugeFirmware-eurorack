@@ -38,6 +38,7 @@
 #include "gui/ui/ui.h"
 #include "gui/ui_timer_manager.h"
 #include "gui/views/automation_view.h"
+#include "gui/views/euclidean_view.h"
 #include "gui/views/timeline_view.h"
 #include "gui/views/view.h"
 #include "hid/buttons.h"
@@ -545,6 +546,20 @@ ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bo
 			}
 			else if (currentUIMode == UI_MODE_ADDING_DRUM_NOTEROW || currentUIMode == UI_MODE_AUDITIONING) {
 				createDrumForAuditionedNoteRow(DrumType::MIDI);
+			}
+		}
+	}
+
+	// SHIFT + CV: turn this clip into a four-gate "Euclid" clip and open the Euclidean view. A clip that isn't a Kit
+	// yet becomes one first; the view then creates the gate rows itself.
+	else if (b == CV && Buttons::isShiftButtonPressed() && currentUIMode == UI_MODE_NONE) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+
+			if (getCurrentOutputType() == OutputType::KIT || changeOutputType(OutputType::KIT)) {
+				changeRootUI(&euclideanView);
 			}
 		}
 	}
