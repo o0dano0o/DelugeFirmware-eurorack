@@ -415,6 +415,12 @@ void EuclideanView::showLengthPopup(int32_t channel, int32_t numSteps) {
 ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool inCardRoutine) {
 	using namespace deluge::hid::button;
 
+	// On 7-segment displays the length/hits readouts are persistent popups, so clear any left showing. This also
+	// covers leaving the view, so the display it returns to isn't left with a stuck number.
+	if (on) {
+		display->cancelPopup();
+	}
+
 	// BACK, or SHIFT+KIT again, returns to the normal Kit clip view
 	if (b == BACK || (b == KIT && Buttons::isShiftButtonPressed())) {
 		if (on) {
