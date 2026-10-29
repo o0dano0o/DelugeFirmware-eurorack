@@ -735,7 +735,7 @@ void EuclideanView::renderTrack(RGB image[][kDisplayWidth + kSideBarWidth], int3
 	// The pattern's start point is tinted a different shade. It moves with the rotation (it's where the un-rotated
 	// step 1 has been carried to), so you can see where the rhythm begins. Its empty state is a touch brighter than
 	// other empty steps so it shows even when there's no hit on it.
-	int32_t startStep = rotation_[channel] % std::max(numSteps, 1);
+	int32_t startStep = rotation_[channel] % std::max<int32_t>(numSteps, 1);
 	RGB startColour = RGB::fromHue(channel * 48 + 24);
 	RGB startEmpty = startColour.dim(2);
 	int32_t playheadStep = getPlayheadStep(clip, channel);
