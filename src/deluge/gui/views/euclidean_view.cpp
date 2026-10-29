@@ -352,10 +352,10 @@ void EuclideanView::editTrackHits(int32_t channel, int32_t offset) {
 
 void EuclideanView::encoderTurned(int32_t channel, int32_t offset) {
 	if (Buttons::isShiftButtonPressed()) {
-		editTrackHits(channel, offset);
+		editTrackLength(channel, offset);
 	}
 	else {
-		editTrackLength(channel, offset);
+		editTrackHits(channel, offset);
 	}
 }
 
