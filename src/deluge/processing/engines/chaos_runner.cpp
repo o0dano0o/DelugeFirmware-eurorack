@@ -40,6 +40,8 @@ bool tempoSync = false;
 uint32_t lastSampleTimer = 0;
 float pendingSeconds = 0.0f;
 uint8_t lastGates = 0;
+uint32_t lastRise[kNumGateRules] = {};
+bool everRose[kNumGateRules] = {};
 
 float currentBpm() {
 	if (currentSong == nullptr) {
@@ -58,7 +60,11 @@ void writeOutputs() {
 	uint8_t changed = gates ^ lastGates;
 	lastGates = gates;
 	for (uint8_t g = 0; g < kNumGateRules; g++) {
-		if (changed & (1 << g)) {
+		if ((changed & gates) & (1 << g)) {
+			lastRise[g] = AudioEngine::audioSampleTimer;
+			everRose[g] = true;
+		}
+		if ((changed & (1 << g)) && (gateMask & (1 << g))) {
 			cvEngine.sendChaosGate(g, gates & (1 << g));
 		}
 	}
@@ -86,6 +92,16 @@ void apply(bool wasActive) {
 	}
 }
 } // namespace
+
+bool gateRecentlyHigh(int32_t gate, int32_t holdMs) {
+	if (gate < 0 || gate >= kNumGateRules) {
+		return false;
+	}
+	if (chaosEngine.getGateLevels() & (1 << gate)) {
+		return true;
+	}
+	return everRose[gate] && (AudioEngine::audioSampleTimer - lastRise[gate]) < static_cast<uint32_t>(holdMs * 44);
+}
 
 float getBpm() {
 	return currentBpm();

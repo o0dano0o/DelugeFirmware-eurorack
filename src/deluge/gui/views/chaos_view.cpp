@@ -45,11 +45,13 @@ namespace {
 
 constexpr uint32_t kFrameSamples = 3528; ///< redraw about every 80 ms (44.1 kHz audio clock)
 constexpr int32_t kPopupMs = 800;
+constexpr int32_t kGateHoldMs = 150;
 constexpr float kFrameSeconds = 0.08f;
 /// A trail fades to 10% brightness over this fraction of the sloth's loop time
 constexpr float kTrailLoopFraction = 0.25f;
 
 const RGB kSlothColour[3] = {RGB{255, 70, 60}, RGB{70, 230, 90}, RGB{70, 130, 255}};
+const RGB kGateColour[kNumGateRules] = {RGB{255, 190, 40}, RGB{255, 255, 255}, RGB{255, 90, 200}, RGB{60, 255, 255}};
 const RGB kCVColour[2] = {RGB{0, 210, 225}, RGB{225, 70, 205}};
 char const* const kModelNames[] = {"Lorenz", "Rossler", "Thomas"};
 char const* const kViewNames[] = {"All", "Sloth A", "Sloth B", "Sloth C"};
@@ -162,6 +164,17 @@ bool ChaosView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 		}
 		if (occupancyMask) {
 			memset(occupancyMask[y], 64, kDisplayWidth);
+		}
+	}
+
+	// gate indicators in the four corners (top left to bottom right = gates 1 to 4); they lie on top of the trails
+	// because a sloth hardly ever reaches a corner. Triggers are held lit briefly so they can be seen.
+	static const int32_t cornerX[kNumGateRules] = {0, kDisplayWidth - 1, 0, kDisplayWidth - 1};
+	static const int32_t cornerY[kNumGateRules] = {kDisplayHeight - 1, kDisplayHeight - 1, 0, 0};
+	for (int32_t g = 0; g < kNumGateRules; g++) {
+		if (whichRows & (1 << cornerY[g])) {
+			bool high = runner::gateRecentlyHigh(g, kGateHoldMs);
+			image[cornerY[g]][cornerX[g]] = high ? kGateColour[g] : RGB::monochrome(10);
 		}
 	}
 

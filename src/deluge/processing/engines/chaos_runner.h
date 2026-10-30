@@ -53,6 +53,10 @@ void loadSettings(const Settings& settings);
 /// Chaos off and everything back to the defaults, as for a song with no chaos settings
 void resetToDefaults();
 
+/// For displays: true while chaos gate rule `gate` is high, or for `holdMs` after it last went high. Triggers are only
+/// 10 ms long, so without the hold a display redrawn every 80 ms would miss most of them.
+bool gateRecentlyHigh(int32_t gate, int32_t holdMs);
+
 /// Called from the scheduler (about every 2 to 4 ms)
 void tick();
 

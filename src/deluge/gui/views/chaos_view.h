@@ -27,6 +27,8 @@
 /// Main grid (16 x 8): each sloth's x value picks the column and its z value the row, so a sloth traces its
 /// attractor. The pad under the sloth is lit white; the trail it leaves fades over a fraction of that sloth's loop, so
 /// slow sloths keep longer trails. Sloth A is red, B green, C blue.
+/// Corners: the four chaos gates (top left to bottom right = gates 1 to 4), lit while the gate is high. Triggers
+/// stay lit for 150 ms so they are visible.
 /// Sidebar: left column is CV 1, right column CV 2 (8 levels, 0 to 10 V).
 ///
 /// Controls:
