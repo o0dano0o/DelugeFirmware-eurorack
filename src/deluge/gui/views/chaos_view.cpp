@@ -20,6 +20,7 @@
 #include "extern.h"
 #include "gui/colour/colour.h"
 #include "gui/ui/ui.h"
+#include "gui/ui_timer_manager.h"
 #include "gui/views/euclidean_view.h"
 #include "gui/views/view.h"
 #include "hid/button.h"
@@ -43,6 +44,7 @@ ChaosView chaosView{};
 namespace {
 
 constexpr uint32_t kFrameSamples = 3528; ///< redraw about every 80 ms (44.1 kHz audio clock)
+constexpr int32_t kPopupMs = 800;
 constexpr float kFrameSeconds = 0.08f;
 /// A trail fades to 10% brightness over this fraction of the sloth's loop time
 constexpr float kTrailLoopFraction = 0.25f;
@@ -230,7 +232,14 @@ void ChaosView::showPopup(char const* text, bool scrollOn7Seg) {
 	else {
 		// no flashing, right-aligned, like the Euclidean view's number popups
 		display->displayPopup(text, 0, true);
+		// that popup stays until cancelled, so clear it shortly after the last turn
+		uiTimerManager.setTimer(TimerName::UI_SPECIFIC, kPopupMs);
 	}
+}
+
+ActionResult ChaosView::timerCallback() {
+	display->cancelPopup();
+	return ActionResult::DEALT_WITH;
 }
 
 void ChaosView::changePeriod(int32_t sloth, int32_t offset) {
