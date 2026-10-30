@@ -38,6 +38,21 @@ bool isActive();
 void setTempoSync(bool sync);
 bool isTempoSync();
 
+/// Everything that is saved with a song
+struct Settings {
+	Model model = Model::LORENZ;
+	bool tempoSync = false;
+	float periods[kNumSloths] = {12.0f, 30.0f, 90.0f};
+	float coupling = 0.04f;
+	uint8_t gateMask = 0; ///< bit g: gate g driven by chaos
+	uint8_t cvMask = 0;   ///< bit c: CV c driven by chaos
+};
+Settings getSettings();
+/// Replaces the current settings (and the outputs' sources) with these
+void loadSettings(const Settings& settings);
+/// Chaos off and everything back to the defaults, as for a song with no chaos settings
+void resetToDefaults();
+
 /// Called from the scheduler (about every 2 to 4 ms)
 void tick();
 

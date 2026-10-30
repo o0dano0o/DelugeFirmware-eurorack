@@ -147,6 +147,44 @@ void setTempoSync(bool sync) {
 	}
 }
 
+Settings getSettings() {
+	Settings s;
+	s.model = chaosEngine.getModel();
+	s.tempoSync = tempoSync;
+	for (int32_t i = 0; i < kNumSloths; i++) {
+		s.periods[i] = chaosEngine.getPeriod(i);
+	}
+	s.coupling = chaosEngine.getCoupling();
+	s.gateMask = gateMask;
+	s.cvMask = cvMask;
+	return s;
+}
+
+void loadSettings(const Settings& s) {
+	setAll(false);
+	chaosEngine.setModel(s.model);
+	setTempoSync(s.tempoSync);
+	for (int32_t i = 0; i < kNumSloths; i++) {
+		chaosEngine.setPeriod(i, s.periods[i]);
+	}
+	chaosEngine.setCoupling(s.coupling);
+	chaosEngine.reset();
+	for (int32_t g = 0; g < kNumGateRules; g++) {
+		if (s.gateMask & (1 << g)) {
+			setGateChaos(g, true);
+		}
+	}
+	for (int32_t c = 0; c < kNumCVOutputs; c++) {
+		if (s.cvMask & (1 << c)) {
+			setCVChaos(c, true);
+		}
+	}
+}
+
+void resetToDefaults() {
+	loadSettings(Settings{});
+}
+
 void playbackBegun() {
 	if (!isActive()) {
 		return;

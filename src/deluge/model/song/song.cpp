@@ -65,6 +65,7 @@
 #include "util/try.h"
 #include <cstring>
 #include <hid/buttons.h>
+#include "processing/engines/chaos_runner.h"
 #include <new>
 #include <stdint.h>
 
@@ -1408,6 +1409,21 @@ weAreInArrangementEditorOrInClipInstance:
 	writer.writeTag("disabledPresetScales", disabledPresetScales.to_ulong());
 	writer.writeClosingTag("scales");
 
+	// Chaos engine (only when something is using it, so ordinary songs don't change)
+	if (deluge::chaos::runner::isActive()) {
+		auto chaos = deluge::chaos::runner::getSettings();
+		writer.writeOpeningTag("chaos");
+		writer.writeTag("model", static_cast<int32_t>(chaos.model));
+		writer.writeTag("tempoSync", chaos.tempoSync ? 1 : 0);
+		writer.writeTag("periodA", static_cast<int32_t>(chaos.periods[0] * 100.0f + 0.5f));
+		writer.writeTag("periodB", static_cast<int32_t>(chaos.periods[1] * 100.0f + 0.5f));
+		writer.writeTag("periodC", static_cast<int32_t>(chaos.periods[2] * 100.0f + 0.5f));
+		writer.writeTag("coupling", static_cast<int32_t>(chaos.coupling * 10000.0f + 0.5f));
+		writer.writeTag("gates", chaos.gateMask);
+		writer.writeTag("cv", chaos.cvMask);
+		writer.writeClosingTag("chaos");
+	}
+
 	writer.writeClosingTag("song", true, true);
 }
 
@@ -1429,6 +1445,9 @@ Error Song::readFromFile(Deserializer& reader) {
 	}
 
 	uint64_t newTimePerTimerTick = (uint64_t)1 << 32; // TODO: make better!
+
+	// A song without a chaos section leaves chaos off
+	deluge::chaos::runner::resetToDefaults();
 
 	// reverb mode is freeverb for songs that predate having multiple options. New songs will set it to mutable anyway
 	// so this is only used as a fallback
@@ -1911,6 +1930,43 @@ unknownTag:
 					reader.exitTag(tagName);
 				}
 				reader.exitTag("scales", true);
+			}
+
+			else if (!strcmp(tagName, "chaos")) {
+				deluge::chaos::runner::Settings chaos;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "model")) {
+						int32_t m = reader.readTagOrAttributeValueInt();
+						if (m >= 0 && m < static_cast<int32_t>(deluge::chaos::Model::kNumModels)) {
+							chaos.model = static_cast<deluge::chaos::Model>(m);
+						}
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						chaos.tempoSync = reader.readTagOrAttributeValueInt() != 0;
+					}
+					else if (!strcmp(tagName, "periodA")) {
+						chaos.periods[0] = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "periodB")) {
+						chaos.periods[1] = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "periodC")) {
+						chaos.periods[2] = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "coupling")) {
+						chaos.coupling = reader.readTagOrAttributeValueInt() / 10000.0f;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						chaos.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "cv")) {
+						chaos.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("chaos", true);
+				deluge::chaos::runner::loadSettings(chaos);
 			}
 
 			else if (!strcmp(tagName, "sections")) {
