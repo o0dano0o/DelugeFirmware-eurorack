@@ -1,5 +1,6 @@
 #include "CppUTest/TestHarness.h"
 #include "processing/engines/chaos_engine.h"
+#include "processing/engines/chaos_probability.h"
 
 #include <cmath>
 #include <cstring>
@@ -154,4 +155,53 @@ TEST(ChaosEngineTests, modelSwitchGlides) {
 		prev = e.getCVVolts(0);
 	}
 	CHECK_TRUE(maxJump < 0.2f);
+}
+
+TEST_GROUP(ChaosProbabilityTests){};
+
+TEST(ChaosProbabilityTests, depthZeroAlwaysPasses) {
+	for (float x = -1.0f; x <= 1.0f; x += 0.25f) {
+		DOUBLES_EQUAL(1.0, deluge::chaos::probability::passProbability(x, 0.0f), 1e-6);
+	}
+}
+
+TEST(ChaosProbabilityTests, fullDepthFollowsChaos) {
+	using deluge::chaos::probability::passProbability;
+	DOUBLES_EQUAL(0.0, passProbability(-1.0f, 1.0f), 1e-6);
+	DOUBLES_EQUAL(0.5, passProbability(0.0f, 1.0f), 1e-6);
+	DOUBLES_EQUAL(1.0, passProbability(1.0f, 1.0f), 1e-6);
+	DOUBLES_EQUAL(0.75, passProbability(0.0f, 0.5f), 1e-6);
+}
+
+TEST(ChaosProbabilityTests, inputsAreClamped) {
+	using deluge::chaos::probability::passProbability;
+	DOUBLES_EQUAL(0.0, passProbability(-5.0f, 2.0f), 1e-6);
+	DOUBLES_EQUAL(1.0, passProbability(5.0f, -2.0f), 1e-6);
+}
+
+TEST(ChaosProbabilityTests, rollerIsRepeatableAfterReset) {
+	deluge::chaos::probability::Roller a;
+	float first[16];
+	for (float& v : first) {
+		v = a.next();
+	}
+	a.reset();
+	for (float v : first) {
+		DOUBLES_EQUAL(v, a.next(), 0.0);
+	}
+}
+
+TEST(ChaosProbabilityTests, rollerExtremesAndRate) {
+	deluge::chaos::probability::Roller r;
+	int32_t passed = 0;
+	for (int32_t i = 0; i < 20000; i++) {
+		CHECK(r.roll(1.0f));
+		CHECK(!r.roll(0.0f));
+		float v = r.next();
+		CHECK(v >= 0.0f && v < 1.0f);
+	}
+	for (int32_t i = 0; i < 20000; i++) {
+		passed += r.roll(0.3f) ? 1 : 0;
+	}
+	DOUBLES_EQUAL(0.3, passed / 20000.0, 0.02);
 }

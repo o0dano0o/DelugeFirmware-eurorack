@@ -33,6 +33,18 @@ bool isCVChaos(int32_t cv);
 void setAll(bool chaos);
 /// Whether any output is driven by chaos
 bool isActive();
+/// Whether chaos is in use at all: an output driven by chaos, or a gate whose Euclid hits are thinned by chaos
+bool inUse();
+
+/// Chaos-driven hit probability for a gate that is still playing its Euclidean pattern. Source 0 is off; 1 to 3
+/// takes the x of sloth A, B or C. The depth (0 to 1, shared by all gates) sets how far the chaos pulls the
+/// probability down from 100%. Ignored for a gate that chaos drives directly.
+void setProbSource(int32_t gate, uint8_t source);
+uint8_t getProbSource(int32_t gate);
+void setProbDepth(float depth);
+float getProbDepth();
+/// Called for each hit on a gate; true if it should sound. Always true when the gate has no probability source.
+bool allowNoteOn(int32_t gate);
 
 /// Free time: periods in seconds. Tempo time: periods in beats, so the chaos follows the song's tempo.
 void setTempoSync(bool sync);
@@ -46,6 +58,8 @@ struct Settings {
 	float coupling = 0.04f;
 	uint8_t gateMask = 0; ///< bit g: gate g driven by chaos
 	uint8_t cvMask = 0;   ///< bit c: CV c driven by chaos
+	uint8_t probSource[kNumGateRules] = {0, 0, 0, 0}; ///< per gate: 0 off, 1 to 3 = sloth A to C
+	float probDepth = 0.5f;
 };
 Settings getSettings();
 /// Replaces the current settings (and the outputs' sources) with these

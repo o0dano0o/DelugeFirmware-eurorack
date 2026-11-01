@@ -19,6 +19,7 @@
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
 #include "processing/engines/audio_engine.h"
+#include "processing/engines/chaos_probability.h"
 #include "processing/engines/cv_engine.h"
 
 namespace deluge::chaos::runner {
@@ -37,6 +38,9 @@ ChaosEngine chaosEngine;
 uint8_t gateMask = 0; ///< bit g set: gate g is driven by chaos rule g
 uint8_t cvMask = 0;   ///< bit c set: CV c is driven by chaos
 bool tempoSync = false;
+uint8_t probSource[kNumGateRules] = {0, 0, 0, 0};
+float probDepth = 0.5f;
+probability::Roller roller;
 uint32_t lastSampleTimer = 0;
 float pendingSeconds = 0.0f;
 uint8_t lastGates = 0;
@@ -78,8 +82,9 @@ void apply(bool wasActive) {
 	// gates the CV engine refused (run/clock) aren't ours
 	gateMask = cvEngine.getChaosOwnedGates();
 
-	if (!wasActive && (cvMask || gateMask)) {
+	if (!wasActive && inUse()) {
 		chaosEngine.reset();
+		roller.reset();
 		lastSampleTimer = AudioEngine::audioSampleTimer;
 		pendingSeconds = 0.0f;
 		chaosEngine.step(kStepSeconds, currentBpm());
@@ -115,6 +120,57 @@ bool isActive() {
 	return cvMask || gateMask;
 }
 
+namespace {
+bool anyProb() {
+	for (uint8_t s : probSource) {
+		if (s != 0) {
+			return true;
+		}
+	}
+	return false;
+}
+} // namespace
+
+bool inUse() {
+	return isActive() || anyProb();
+}
+
+void setProbSource(int32_t gate, uint8_t source) {
+	if (gate < 0 || gate >= kNumGateRules || source > kNumSloths) {
+		return;
+	}
+	bool was = inUse();
+	probSource[gate] = source;
+	if (!was && inUse()) {
+		// start the chaos from its seed, as when an output first takes it over
+		chaosEngine.reset();
+		roller.reset();
+		lastSampleTimer = AudioEngine::audioSampleTimer;
+		pendingSeconds = 0.0f;
+		chaosEngine.step(kStepSeconds, currentBpm());
+	}
+}
+
+uint8_t getProbSource(int32_t gate) {
+	return (gate < 0 || gate >= kNumGateRules) ? 0 : probSource[gate];
+}
+
+void setProbDepth(float depth) {
+	probDepth = depth < 0.0f ? 0.0f : (depth > 1.0f ? 1.0f : depth);
+}
+
+float getProbDepth() {
+	return probDepth;
+}
+
+bool allowNoteOn(int32_t gate) {
+	if (gate < 0 || gate >= kNumGateRules || probSource[gate] == 0) {
+		return true;
+	}
+	float x = chaosEngine.getNormalised(probSource[gate] - 1, 0);
+	return roller.roll(probability::passProbability(x, probDepth));
+}
+
 bool isGateChaos(int32_t gate) {
 	return gateMask & (1 << gate);
 }
@@ -127,7 +183,7 @@ void setGateChaos(int32_t gate, bool chaos) {
 	if (gate < 0 || gate >= kNumGateRules) {
 		return;
 	}
-	bool was = isActive();
+	bool was = inUse();
 	gateMask = chaos ? (gateMask | (1 << gate)) : (gateMask & ~(1 << gate));
 	apply(was);
 }
@@ -136,13 +192,13 @@ void setCVChaos(int32_t cv, bool chaos) {
 	if (cv < 0 || cv >= kNumCVOutputs) {
 		return;
 	}
-	bool was = isActive();
+	bool was = inUse();
 	cvMask = chaos ? (cvMask | (1 << cv)) : (cvMask & ~(1 << cv));
 	apply(was);
 }
 
 void setAll(bool chaos) {
-	bool was = isActive();
+	bool was = inUse();
 	gateMask = chaos ? 0b1111 : 0;
 	cvMask = chaos ? 0b11 : 0;
 	apply(was);
@@ -173,6 +229,10 @@ Settings getSettings() {
 	s.coupling = chaosEngine.getCoupling();
 	s.gateMask = gateMask;
 	s.cvMask = cvMask;
+	for (int32_t g = 0; g < kNumGateRules; g++) {
+		s.probSource[g] = probSource[g];
+	}
+	s.probDepth = probDepth;
 	return s;
 }
 
@@ -185,6 +245,13 @@ void loadSettings(const Settings& s) {
 	}
 	chaosEngine.setCoupling(s.coupling);
 	chaosEngine.reset();
+	roller.reset();
+	lastSampleTimer = AudioEngine::audioSampleTimer;
+	pendingSeconds = 0.0f;
+	for (int32_t g = 0; g < kNumGateRules; g++) {
+		probSource[g] = s.probSource[g] > kNumSloths ? 0 : s.probSource[g];
+	}
+	setProbDepth(s.probDepth);
 	for (int32_t g = 0; g < kNumGateRules; g++) {
 		if (s.gateMask & (1 << g)) {
 			setGateChaos(g, true);
@@ -202,16 +269,17 @@ void resetToDefaults() {
 }
 
 void playbackBegun() {
-	if (!isActive()) {
+	if (!inUse()) {
 		return;
 	}
 	chaosEngine.reset();
+	roller.reset();
 	pendingSeconds = 0.0f;
 	lastSampleTimer = AudioEngine::audioSampleTimer;
 }
 
 void tick() {
-	if (!isActive()) {
+	if (!inUse()) {
 		return;
 	}
 	uint32_t now = AudioEngine::audioSampleTimer;

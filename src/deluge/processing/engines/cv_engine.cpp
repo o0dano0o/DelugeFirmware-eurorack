@@ -159,6 +159,11 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 		return;
 	}
 
+	// A gate still playing its Euclidean pattern can have its hits thinned by chaos
+	if (on && !deluge::chaos::runner::allowNoteOn(channel)) {
+		return;
+	}
+
 	// Note-off
 	if (!on) {
 

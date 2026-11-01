@@ -1410,7 +1410,7 @@ weAreInArrangementEditorOrInClipInstance:
 	writer.writeClosingTag("scales");
 
 	// Chaos engine (only when something is using it, so ordinary songs don't change)
-	if (deluge::chaos::runner::isActive()) {
+	if (deluge::chaos::runner::inUse()) {
 		auto chaos = deluge::chaos::runner::getSettings();
 		writer.writeOpeningTag("chaos");
 		writer.writeTag("model", static_cast<int32_t>(chaos.model));
@@ -1421,6 +1421,14 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeTag("coupling", static_cast<int32_t>(chaos.coupling * 10000.0f + 0.5f));
 		writer.writeTag("gates", chaos.gateMask);
 		writer.writeTag("cv", chaos.cvMask);
+		for (int32_t g = 0; g < deluge::chaos::kNumGateRules; g++) {
+			if (chaos.probSource[g] != 0) {
+				// "prob1" to "prob4": which sloth thins this gate's Euclid hits (1 to 3)
+				char tag[8] = {'p', 'r', 'o', 'b', static_cast<char>('1' + g), 0};
+				writer.writeTag(tag, chaos.probSource[g]);
+			}
+		}
+		writer.writeTag("probDepth", static_cast<int32_t>(chaos.probDepth * 100.0f + 0.5f));
 		writer.writeClosingTag("chaos");
 	}
 
@@ -1962,6 +1970,13 @@ unknownTag:
 					}
 					else if (!strcmp(tagName, "cv")) {
 						chaos.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strncmp(tagName, "prob", 4) && tagName[4] >= '1' && tagName[4] <= '4' && !tagName[5]) {
+						int32_t src = reader.readTagOrAttributeValueInt();
+						chaos.probSource[tagName[4] - '1'] = (src >= 0 && src <= deluge::chaos::kNumSloths) ? src : 0;
+					}
+					else if (!strcmp(tagName, "probDepth")) {
+						chaos.probDepth = reader.readTagOrAttributeValueInt() / 100.0f;
 					}
 					reader.exitTag(tagName);
 				}
