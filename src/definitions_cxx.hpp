@@ -211,6 +211,7 @@ enum class UIType : uint8_t {
 	SOUND_EDITOR,
 	EUCLIDEAN,
 	CHAOS,
+	TURING,
 	// Keep these at the bottom!
 	UI_TYPE_COUNT,
 	NONE = 255,

@@ -66,6 +66,7 @@
 #include <cstring>
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/turing_runner.h"
 #include <new>
 #include <stdint.h>
 
@@ -1432,6 +1433,21 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("chaos");
 	}
 
+	// Turing machine (only when it is on)
+	if (deluge::turing::runner::isActive()) {
+		auto turing = deluge::turing::runner::getSettings();
+		writer.writeOpeningTag("turing");
+		writer.writeTag("channel", turing.channel);
+		writer.writeTag("clock", static_cast<int32_t>(turing.clock));
+		writer.writeTag("division", turing.division);
+		writer.writeTag("random", static_cast<int32_t>(turing.random));
+		writer.writeTag("flip", static_cast<int32_t>(turing.flipProbability * 10000.0f + 0.5f));
+		writer.writeTag("length", turing.length);
+		writer.writeTag("octaves", turing.octaves);
+		writer.writeTag("register", turing.shiftRegister);
+		writer.writeClosingTag("turing");
+	}
+
 	writer.writeClosingTag("song", true, true);
 }
 
@@ -1456,6 +1472,7 @@ Error Song::readFromFile(Deserializer& reader) {
 
 	// A song without a chaos section leaves chaos off
 	deluge::chaos::runner::resetToDefaults();
+	deluge::turing::runner::resetToDefaults();
 
 	// reverb mode is freeverb for songs that predate having multiple options. New songs will set it to mutable anyway
 	// so this is only used as a fallback
@@ -1982,6 +1999,47 @@ unknownTag:
 				}
 				reader.exitTag("chaos", true);
 				deluge::chaos::runner::loadSettings(chaos);
+			}
+
+			else if (!strcmp(tagName, "turing")) {
+				deluge::turing::runner::Settings turing;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "channel")) {
+						turing.channel = static_cast<int8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "clock")) {
+						int32_t v = reader.readTagOrAttributeValueInt();
+						if (v >= 0 && v < static_cast<int32_t>(deluge::turing::runner::ClockSource::kNumSources)) {
+							turing.clock = static_cast<deluge::turing::runner::ClockSource>(v);
+						}
+					}
+					else if (!strcmp(tagName, "division")) {
+						turing.division = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "random")) {
+						int32_t v = reader.readTagOrAttributeValueInt();
+						if (v >= 0 && v < static_cast<int32_t>(deluge::turing::runner::RandomSource::kNumSources)) {
+							turing.random = static_cast<deluge::turing::runner::RandomSource>(v);
+						}
+					}
+					else if (!strcmp(tagName, "flip")) {
+						turing.flipProbability = reader.readTagOrAttributeValueInt() / 10000.0f;
+					}
+					else if (!strcmp(tagName, "length")) {
+						turing.length = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "octaves")) {
+						turing.octaves = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "register")) {
+						turing.shiftRegister = static_cast<uint16_t>(reader.readTagOrAttributeValueInt());
+						turing.hasRegister = true;
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("turing", true);
+				deluge::turing::runner::loadSettings(turing);
 			}
 
 			else if (!strcmp(tagName, "sections")) {

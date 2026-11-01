@@ -23,6 +23,7 @@
 #include "gui/ui/ui.h"
 #include "gui/views/chaos_view.h"
 #include "gui/views/instrument_clip_view.h"
+#include "gui/views/turing_view.h"
 #include "gui/views/view.h"
 #include "hid/button.h"
 #include "hid/buttons.h"
@@ -42,6 +43,7 @@
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/turing_runner.h"
 #include "storage/storage_manager.h"
 #include "util/functions.h"
 #include <algorithm>
@@ -713,6 +715,18 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		return ActionResult::DEALT_WITH;
 	}
 
+	// KEYBOARD opens the Turing machine pitch generator
+	if (b == KEYBOARD) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+			display->cancelPopup();
+			changeRootUI(&turingView);
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
 	// CV on its own opens the chaos pad view
 	if (b == CV && !Buttons::isShiftButtonPressed()) {
 		if (on) {
@@ -1151,6 +1165,12 @@ bool EuclideanView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth 
 				image[y][kDisplayWidth] = RGB{0, v, v};
 			}
 
+			// The Turing machine uses channel N's CV and gate as a voice: show both pads in orange
+			if (deluge::turing::runner::getChannel() == c
+			    && (y == topRowForChannel(c) || (y == bottomRowForChannel(c) && c < deluge::chaos::kNumCVOutputs))) {
+				image[y][kDisplayWidth] = deluge::turing::runner::stepRecently(120) ? RGB{255, 220, 120} : RGB{255, 120, 0};
+			}
+
 			// Page pad (second sidebar column): upper pad = steps 1-32, lower pad = steps 33-64, lit for the page
 			// showing
 			int32_t padPage = (y == topRowForChannel(c)) ? 0 : 1;
@@ -1180,12 +1200,16 @@ void EuclideanView::graphicsRoutine() {
 		uiNeedsRendering(this, rowsToRedraw, 0);
 	}
 
-	// Chaos indicators in the mute column: redraw when a gate flips or a CV level moves a step
-	if (deluge::chaos::runner::isActive()) {
+	// Generator indicators in the mute column: redraw when a chaos gate flips, a CV level moves a step, or the Turing
+	// machine steps
+	if (deluge::chaos::runner::isActive() || deluge::turing::runner::isActive()) {
 		auto& chaosEngine = deluge::chaos::runner::engine();
 		uint32_t signature = chaosEngine.getGateLevels();
 		for (int32_t cv = 0; cv < deluge::chaos::kNumCVOutputs; cv++) {
 			signature |= static_cast<uint32_t>(chaosEngine.getCVVolts(cv) * 1.6f) << (8 + 4 * cv);
+		}
+		if (deluge::turing::runner::stepRecently(120)) {
+			signature |= 1u << 24;
 		}
 		if (signature != lastChaosSignature_) {
 			lastChaosSignature_ = signature;
