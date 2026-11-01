@@ -44,6 +44,11 @@ probability::Roller roller;
 uint32_t lastSampleTimer = 0;
 float pendingSeconds = 0.0f;
 uint8_t lastGates = 0;
+uint8_t prevGateMask = 0; ///< gateMask as of the last apply(), to tell which gates were just claimed
+uint8_t extCV = 0;        ///< channels claimed by another generator
+uint8_t extGate = 0;
+bool engineRequested = false;
+uint32_t riseCount[kNumGateRules] = {};
 uint32_t lastRise[kNumGateRules] = {};
 bool everRose[kNumGateRules] = {};
 
@@ -67,6 +72,7 @@ void writeOutputs() {
 		if ((changed & gates) & (1 << g)) {
 			lastRise[g] = AudioEngine::audioSampleTimer;
 			everRose[g] = true;
+			riseCount[g]++;
 		}
 		if ((changed & (1 << g)) && (gateMask & (1 << g))) {
 			cvEngine.sendChaosGate(g, gates & (1 << g));
@@ -74,15 +80,29 @@ void writeOutputs() {
 	}
 }
 
-/// Hands the masks to the CV engine. Starts the chaos running if this is the first output to use it.
-void apply(bool wasActive) {
-	uint8_t oldGates = cvEngine.getChaosOwnedGates();
-	cvEngine.setChaosOwnedCV(cvMask);
-	cvEngine.setChaosOwnedGates(gateMask);
-	// gates the CV engine refused (run/clock) aren't ours
-	gateMask = cvEngine.getChaosOwnedGates();
+bool anyProb() {
+	for (uint8_t src : probSource) {
+		if (src != 0) {
+			return true;
+		}
+	}
+	return false;
+}
 
-	if (!wasActive && inUse()) {
+bool engineWanted() {
+	return cvMask || gateMask || engineRequested || anyProb();
+}
+
+/// Hands the masks to the CV engine. Starts the chaos engine running if this is the first thing to want it.
+void apply(bool wasRunning) {
+	cvMask &= ~extCV;
+	gateMask &= ~extGate;
+	cvEngine.setChaosOwnedCV(cvMask | extCV);
+	cvEngine.setChaosOwnedGates(gateMask | extGate);
+	// gates the CV engine refused (run/clock) aren't ours
+	gateMask = cvEngine.getChaosOwnedGates() & ~extGate;
+
+	if (!wasRunning && engineWanted()) {
 		chaosEngine.reset();
 		roller.reset();
 		lastSampleTimer = AudioEngine::audioSampleTimer;
@@ -91,8 +111,9 @@ void apply(bool wasActive) {
 		lastGates = 0;
 	}
 	// a newly owned gate must be sent its current level
-	lastGates &= oldGates;
-	if (cvMask || gateMask) {
+	lastGates &= prevGateMask;
+	prevGateMask = gateMask;
+	if (engineWanted()) {
 		writeOutputs();
 	}
 }
@@ -120,35 +141,17 @@ bool isActive() {
 	return cvMask || gateMask;
 }
 
-namespace {
-bool anyProb() {
-	for (uint8_t s : probSource) {
-		if (s != 0) {
-			return true;
-		}
-	}
-	return false;
-}
-} // namespace
-
 bool inUse() {
-	return isActive() || anyProb();
+	return engineWanted();
 }
 
 void setProbSource(int32_t gate, uint8_t source) {
 	if (gate < 0 || gate >= kNumGateRules || source > kNumSloths) {
 		return;
 	}
-	bool was = inUse();
+	bool was = engineWanted();
 	probSource[gate] = source;
-	if (!was && inUse()) {
-		// start the chaos from its seed, as when an output first takes it over
-		chaosEngine.reset();
-		roller.reset();
-		lastSampleTimer = AudioEngine::audioSampleTimer;
-		pendingSeconds = 0.0f;
-		chaosEngine.step(kStepSeconds, currentBpm());
-	}
+	apply(was);
 }
 
 uint8_t getProbSource(int32_t gate) {
@@ -171,6 +174,23 @@ bool allowNoteOn(int32_t gate) {
 	return roller.roll(probability::passProbability(x, probDepth));
 }
 
+void setExternalOwnership(uint8_t cvBits, uint8_t gateBits) {
+	bool was = engineWanted();
+	extCV = cvBits & ((1 << kNumCVOutputs) - 1);
+	extGate = gateBits & ((1 << kNumGateRules) - 1);
+	apply(was);
+}
+
+void requestEngine(bool wanted) {
+	bool was = engineWanted();
+	engineRequested = wanted;
+	apply(was);
+}
+
+uint32_t gateRiseCount(int32_t gate) {
+	return (gate >= 0 && gate < kNumGateRules) ? riseCount[gate] : 0;
+}
+
 bool isGateChaos(int32_t gate) {
 	return gateMask & (1 << gate);
 }
@@ -183,7 +203,7 @@ void setGateChaos(int32_t gate, bool chaos) {
 	if (gate < 0 || gate >= kNumGateRules) {
 		return;
 	}
-	bool was = inUse();
+	bool was = engineWanted();
 	gateMask = chaos ? (gateMask | (1 << gate)) : (gateMask & ~(1 << gate));
 	apply(was);
 }
@@ -192,13 +212,13 @@ void setCVChaos(int32_t cv, bool chaos) {
 	if (cv < 0 || cv >= kNumCVOutputs) {
 		return;
 	}
-	bool was = inUse();
+	bool was = engineWanted();
 	cvMask = chaos ? (cvMask | (1 << cv)) : (cvMask & ~(1 << cv));
 	apply(was);
 }
 
 void setAll(bool chaos) {
-	bool was = inUse();
+	bool was = engineWanted();
 	gateMask = chaos ? 0b1111 : 0;
 	cvMask = chaos ? 0b11 : 0;
 	apply(was);
@@ -269,7 +289,7 @@ void resetToDefaults() {
 }
 
 void playbackBegun() {
-	if (!inUse()) {
+	if (!engineWanted()) {
 		return;
 	}
 	chaosEngine.reset();
@@ -279,7 +299,7 @@ void playbackBegun() {
 }
 
 void tick() {
-	if (!inUse()) {
+	if (!engineWanted()) {
 		return;
 	}
 	uint32_t now = AudioEngine::audioSampleTimer;

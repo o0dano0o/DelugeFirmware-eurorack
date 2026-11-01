@@ -63,6 +63,8 @@ file(GLOB_RECURSE deluge_SOURCES
         ../../src/deluge/playback/clock_output_scheduler.cpp
         # For chaos engine tests
         ../../src/deluge/processing/engines/chaos_engine.cpp
+        # For Turing machine tests
+        ../../src/deluge/processing/engines/turing_engine.cpp
 )
 
 add_executable(UnitTests
@@ -79,6 +81,7 @@ add_executable(UnitTests
         clock_output_scheduler_tests.cpp
         notes_state_tests.cpp
         chaos_engine_tests.cpp
+        turing_engine_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)

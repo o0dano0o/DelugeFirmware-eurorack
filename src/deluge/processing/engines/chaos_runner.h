@@ -33,7 +33,8 @@ bool isCVChaos(int32_t cv);
 void setAll(bool chaos);
 /// Whether any output is driven by chaos
 bool isActive();
-/// Whether chaos is in use at all: an output driven by chaos, or a gate whose Euclid hits are thinned by chaos
+/// Whether the chaos engine is running for any reason: an output driven by chaos, a gate whose Euclid hits are thinned by
+/// chaos, or another generator (the Turing machine) that asked for it
 bool inUse();
 
 /// Chaos-driven hit probability for a gate that is still playing its Euclidean pattern. Source 0 is off; 1 to 3
@@ -70,6 +71,17 @@ void resetToDefaults();
 /// For displays: true while chaos gate rule `gate` is high, or for `holdMs` after it last went high. Triggers are only
 /// 10 ms long, so without the hold a display redrawn every 80 ms would miss most of them.
 bool gateRecentlyHigh(int32_t gate, int32_t holdMs);
+
+/// Lets another generator (the Turing machine) claim CV and gate channels. Chaos can't take a claimed channel and
+/// gives up any it was using. Bit n is channel n (CV n and gate n).
+void setExternalOwnership(uint8_t cvBits, uint8_t gateBits);
+
+/// Keeps the chaos engine running even when no output uses it, for generators that take their clock or randomness
+/// from it
+void requestEngine(bool wanted);
+
+/// Number of times chaos gate rule `gate` has gone high since start-up (wraps), for clocking other things
+uint32_t gateRiseCount(int32_t gate);
 
 /// Called from the scheduler (about every 2 to 4 ms)
 void tick();

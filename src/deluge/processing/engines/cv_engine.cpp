@@ -21,6 +21,7 @@
 #include "io/debug/log.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/turing_runner.h"
 #include "util/comparison.h"
 #include "util/functions.h"
 #include <math.h>
@@ -345,6 +346,7 @@ void CVEngine::analogOutTick() {
 
 void CVEngine::playbackBegun() {
 	deluge::chaos::runner::playbackBegun();
+	deluge::turing::runner::playbackBegun();
 	clockState = false;
 	updateRunOutput();
 }
