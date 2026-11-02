@@ -25,6 +25,7 @@
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/turing_view.h"
 #include "gui/views/voice_view.h"
+#include "gui/ui_timer_manager.h"
 #include "gui/views/view.h"
 #include "hid/button.h"
 #include "hid/buttons.h"
@@ -964,6 +965,11 @@ void EuclideanView::toggleStep(int32_t channel, int32_t step, bool clear) {
 	}
 }
 
+ActionResult EuclideanView::timerCallback() {
+	display->cancelPopup();
+	return ActionResult::DEALT_WITH;
+}
+
 void EuclideanView::selectEncoderAction(int8_t offset) {
 	namespace cr = deluge::chaos::runner;
 
@@ -996,12 +1002,15 @@ void EuclideanView::selectEncoderAction(int8_t offset) {
 		percent = std::clamp<int32_t>(percent, 0, 100);
 		cr::setProbDepth(percent / 100.0f);
 		char text[32];
-		snprintf(text, sizeof(text), "Chaos depth %d%%", static_cast<int>(percent));
 		if (display->haveOLED()) {
+			snprintf(text, sizeof(text), "Chaos depth %d%%", static_cast<int>(percent));
 			display->popupTextTemporary(text);
 		}
 		else {
-			display->setScrollingText(text);
+			// short enough to read at a glance, and cleared by the timer
+			snprintf(text, sizeof(text), "D%d", static_cast<int>(percent));
+			display->displayPopup(text, 0, true);
+			uiTimerManager.setTimer(TimerName::UI_SPECIFIC, 800);
 		}
 		return;
 	}

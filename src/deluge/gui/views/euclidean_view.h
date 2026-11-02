@@ -82,6 +82,7 @@ public:
 	ActionResult verticalEncoderAction(int32_t offset, bool inCardRoutine) override;
 	void modEncoderAction(int32_t whichModEncoder, int32_t offset) override;
 	void selectEncoderAction(int8_t offset) override;
+	ActionResult timerCallback() override;
 
 private:
 	/// Makes sure the current Kit clip has a gate row for each of gate outputs 1-4, creating any that are missing so
