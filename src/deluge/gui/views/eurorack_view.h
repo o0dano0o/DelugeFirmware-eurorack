@@ -42,6 +42,17 @@ public:
 	/// Where BACK goes. Set this just before changeRootUI(&eurorackView).
 	void setReturnTo(UI* ui) { returnTo_ = ui; }
 
+	/// Set when the overview opens a feature view; that view's BACK then returns here instead of to the Euclid view.
+	void setOpenedFromHere(bool v) { openedFromHere_ = v; }
+	/// Where a feature view's BACK should go: the overview if it was opened from here (once), otherwise `fallback`.
+	UI* takeBackTarget(UI* fallback) {
+		if (openedFromHere_) {
+			openedFromHere_ = false;
+			return this;
+		}
+		return fallback;
+	}
+
 	bool opened() override;
 	void focusRegained() override;
 	UIType getUIType() override { return UIType::EURORACK; }
@@ -57,9 +68,11 @@ public:
 	ActionResult padAction(int32_t x, int32_t y, int32_t velocity) override;
 
 private:
+	ActionResult openOwnerOfRow(int32_t y);
 	void showNotice(char const* text);
 	uint32_t lastSignature_ = 0xFFFFFFFF;
 	UI* returnTo_ = nullptr;
+	bool openedFromHere_ = false;
 };
 
 extern EurorackView eurorackView;

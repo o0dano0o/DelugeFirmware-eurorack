@@ -15,6 +15,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "gui/views/eurorack_view.h"
 #include "gui/views/chaos_view.h"
 #include "definitions_cxx.hpp"
 #include "extern.h"
@@ -336,7 +337,7 @@ ActionResult ChaosView::buttonAction(deluge::hid::Button b, bool on, bool inCard
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
 			display->cancelPopup();
-			changeRootUI(&euclideanView);
+			changeRootUI(eurorackView.takeBackTarget(&euclideanView));
 		}
 		return ActionResult::DEALT_WITH;
 	}

@@ -267,7 +267,14 @@ void EurorackView::renderOLED(deluge::hid::display::oled_canvas::Canvas& canvas)
 }
 
 ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
-	if (!velocity || x >= kNumOwners) {
+	if (!velocity) {
+		return ActionResult::DEALT_WITH;
+	}
+	// Tapping the meter part of a row opens the feature that drives that output
+	if (x >= kNumOwners + 1 && x < kDisplayWidth) {
+		return openOwnerOfRow(y);
+	}
+	if (x >= kNumOwners) {
 		return ActionResult::DEALT_WITH;
 	}
 	int32_t output = outputForRow(y);
@@ -354,6 +361,7 @@ ActionResult EurorackView::buttonAction(deluge::hid::Button b, bool on, bool inC
 			}
 			display->cancelPopup();
 			// Go through the clip view, which knows how to turn the clip into a Kit and then opens the Euclidean view
+			openedFromHere_ = true;
 			changeRootUI(&instrumentClipView);
 			instrumentClipView.openEuclidean();
 		}
@@ -371,6 +379,7 @@ ActionResult EurorackView::buttonAction(deluge::hid::Button b, bool on, bool inC
 				return ActionResult::DEALT_WITH;
 			}
 			display->cancelPopup();
+			openedFromHere_ = true;
 			changeRootUI(b == CV ? static_cast<UI*>(&chaosView)
 			                     : (b == KEYBOARD ? static_cast<UI*>(&turingView) : static_cast<UI*>(&voiceView)));
 		}
@@ -378,6 +387,44 @@ ActionResult EurorackView::buttonAction(deluge::hid::Button b, bool on, bool inC
 	}
 
 	return UI::buttonAction(b, on, inCardRoutine);
+}
+
+ActionResult EurorackView::openOwnerOfRow(int32_t y) {
+	int32_t output = outputForRow(y);
+	if (output < 0) {
+		return ActionResult::DEALT_WITH;
+	}
+	int32_t channel = channelOf(output);
+	if (!getCurrentClip()) {
+		showNotice("Open a clip first");
+		return ActionResult::DEALT_WITH;
+	}
+	UI* target = nullptr;
+	if (deluge::turing::runner::getChannel() == channel) {
+		target = &turingView;
+	}
+	else if (deluge::voice::runner::getChannel() == channel) {
+		target = &voiceView;
+	}
+	else if (isGate(output) ? deluge::chaos::runner::isGateChaos(channel) : deluge::chaos::runner::isCVChaos(channel)) {
+		target = &chaosView;
+	}
+	if (target) {
+		display->cancelPopup();
+		openedFromHere_ = true;
+		changeRootUI(target);
+		return ActionResult::DEALT_WITH;
+	}
+	// Euclid (or unassigned) opens the Euclidean view, which needs a Kit clip
+	if (getCurrentClip()->type != ClipType::INSTRUMENT) {
+		showNotice("Open a clip first");
+		return ActionResult::DEALT_WITH;
+	}
+	display->cancelPopup();
+	openedFromHere_ = true;
+	changeRootUI(&instrumentClipView);
+	instrumentClipView.openEuclidean();
+	return ActionResult::DEALT_WITH;
 }
 
 void EurorackView::showNotice(char const* text) {

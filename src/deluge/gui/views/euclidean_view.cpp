@@ -728,6 +728,7 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
 			display->cancelPopup();
+			eurorackView.setOpenedFromHere(false);
 			changeRootUI(&turingView);
 		}
 		return ActionResult::DEALT_WITH;
@@ -740,6 +741,7 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
 			display->cancelPopup();
+			eurorackView.setOpenedFromHere(false);
 			changeRootUI(&voiceView);
 		}
 		return ActionResult::DEALT_WITH;
@@ -752,6 +754,7 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
 			display->cancelPopup();
+			eurorackView.setOpenedFromHere(false);
 			changeRootUI(&chaosView);
 		}
 		return ActionResult::DEALT_WITH;
@@ -776,7 +779,7 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 			if (inCardRoutine) {
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
-			changeRootUI(&instrumentClipView);
+			changeRootUI(eurorackView.takeBackTarget(&instrumentClipView));
 		}
 		return ActionResult::DEALT_WITH;
 	}
