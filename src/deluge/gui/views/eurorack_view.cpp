@@ -55,7 +55,6 @@ constexpr int32_t kNumGates = 4;
 constexpr int32_t kNumCVs = 2;
 constexpr int32_t kNumOutputs = kNumGates + kNumCVs;
 constexpr int32_t kTopRow = kDisplayHeight - 1;
-constexpr int32_t kKeyRow = 0;
 constexpr int32_t kMeterStart = 5;
 constexpr int32_t kMeterWidth = kDisplayWidth - kMeterStart;
 constexpr int32_t kHoldMs = 120;
@@ -209,11 +208,6 @@ bool EurorackView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth 
 					image[y][kMeterStart + x] =
 					    (x < lit) ? ownerColour : ownerColour.transform([](uint8_t v) { return v / 20; });
 				}
-			}
-		}
-		else if (y == kKeyRow) {
-			for (int32_t o = 0; o < kNumOwners; o++) {
-				image[y][o] = kOwnerColour[o];
 			}
 		}
 	}

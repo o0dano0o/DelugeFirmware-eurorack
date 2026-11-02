@@ -29,7 +29,6 @@
 ///                     voice use a CV and gate pair, so they only exist on channel 1 and 2.
 ///   pads 6-16         a live meter: for a gate it lights fully while the gate is high (and half for a moment after);
 ///                     for a CV it is a bar showing the voltage, 0 to 10 V
-///   bottom row        key to the four owner colours
 ///
 /// Entered with SHIFT + CV from the Kit/clip view, the session view (so it works from a blank song) or the Euclidean
 /// view. BACK or SHIFT + CV returns to where it was opened from. It needs no clip. From here KIT opens the Euclidean
