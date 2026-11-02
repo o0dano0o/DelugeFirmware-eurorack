@@ -184,6 +184,8 @@ void EuclideanView::focusRegained() {
 		held = false;
 	}
 	heldPad_ = HeldPad{};
+	heldMute_ = -1;
+	heldMuteEdited_ = false;
 
 	if (display->haveOLED()) {
 		renderUIsForOled();
@@ -790,6 +792,32 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	// Letting go of a step pad. A hit that was only tapped (not turned for probability) is cleared now, so holding
 	// a hit to set its probability doesn't also delete it.
 	if (!velocity) {
+		if (x == kDisplayWidth && heldMute_ >= 0) {
+			int32_t muteChannel = heldMute_;
+			bool edited = heldMuteEdited_;
+			if (edited) {
+				heldMute_ = -1;
+				display->cancelPopup();
+				return ActionResult::DEALT_WITH;
+			}
+			if (sdRoutineLock) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE; // Try again outside the card routine
+			}
+			heldMute_ = -1;
+			InstrumentClip* muteClip = getCurrentInstrumentClip();
+			int32_t muteRowIndex;
+			NoteRow* muteRow = findGateRow(muteClip, muteChannel, muteRowIndex);
+			if (muteRow) {
+				char muteStackMemory[MODEL_STACK_MAX_SIZE];
+				ModelStackWithTimelineCounter* muteStackWithClip =
+				    currentSong->setupModelStackWithCurrentClip(muteStackMemory);
+				ModelStackWithNoteRow* muteStack =
+				    muteStackWithClip->addNoteRow(muteClip->getNoteRowId(muteRow, muteRowIndex), muteRow);
+				muteClip->toggleNoteRowMute(muteStack);
+				uiNeedsRendering(this, 0, rowsForChannel(muteChannel));
+			}
+			return ActionResult::DEALT_WITH;
+		}
 		if (x < kDisplayWidth && heldPad_.channel >= 0) {
 			HeldPad released = heldPad_;
 			heldPad_ = HeldPad{};
@@ -867,10 +895,11 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	ModelStackWithNoteRow* modelStack =
 	    modelStackWithClip->addNoteRow(clip->getNoteRowId(noteRow, noteRowIndex), noteRow);
 
-	// Mute column: either row of a track toggles that track's mute
+	// Mute column: either row of a track toggles that track's mute when the pad is let go. Holding it and turning the
+	// select knob instead picks what decides this track's hits (see selectEncoderAction), which then leaves the mute alone.
 	if (x == kDisplayWidth) {
-		clip->toggleNoteRowMute(modelStack);
-		uiNeedsRendering(this, 0, rowsForChannel(channel));
+		heldMute_ = channel;
+		heldMuteEdited_ = false;
 		return ActionResult::DEALT_WITH;
 	}
 
@@ -936,6 +965,47 @@ void EuclideanView::toggleStep(int32_t channel, int32_t step, bool clear) {
 }
 
 void EuclideanView::selectEncoderAction(int8_t offset) {
+	namespace cr = deluge::chaos::runner;
+
+	// Holding a track's mute pad: pick what decides whether its hits sound. Off plays every hit, A, B or C lets the
+	// chaos of that sloth thin them out (how much is set by SHIFT + select with no pad held).
+	if (heldMute_ >= 0) {
+		int32_t source = cr::getProbSource(heldMute_);
+		constexpr int32_t kNumSources = 4;
+		source = (source + (offset > 0 ? 1 : kNumSources - 1)) % kNumSources;
+		cr::setProbSource(heldMute_, static_cast<uint8_t>(source));
+		heldMuteEdited_ = true;
+		static char const* const kNames[] = {"off", "sloth A", "sloth B", "sloth C"};
+		static char const* const kShort[] = {"OFF", "A", "B", "C"};
+		char text[40];
+		if (display->haveOLED()) {
+			snprintf(text, sizeof(text), "Gate %d hits: %s", static_cast<int>(heldMute_ + 1), kNames[source]);
+			display->popupTextTemporary(text);
+		}
+		else {
+			snprintf(text, sizeof(text), "%d %s", static_cast<int>(heldMute_ + 1), kShort[source]);
+			display->displayPopup(text, 0, true);
+		}
+		uiNeedsRendering(this, 0, 0xFF);
+		return;
+	}
+
+	// SHIFT + select with nothing held: how strongly chaos thins the hits, 0 to 100% in 5% steps
+	if (heldPad_.channel < 0 && Buttons::isShiftButtonPressed()) {
+		int32_t percent = static_cast<int32_t>(cr::getProbDepth() * 100.0f + 0.5f) + (offset > 0 ? 5 : -5);
+		percent = std::clamp<int32_t>(percent, 0, 100);
+		cr::setProbDepth(percent / 100.0f);
+		char text[32];
+		snprintf(text, sizeof(text), "Chaos depth %d%%", static_cast<int>(percent));
+		if (display->haveOLED()) {
+			display->popupTextTemporary(text);
+		}
+		else {
+			display->setScrollingText(text);
+		}
+		return;
+	}
+
 	// Only does something while a hit's pad is held: it then sets that hit's probability, as in the normal clip view
 	if (heldPad_.channel < 0) {
 		return;

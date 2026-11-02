@@ -41,6 +41,8 @@ class ModelStackWithTimelineCounter;
 ///   hold SHIFT while turning it -> that track's length in steps
 ///   pattern pads    -> toggle a gate event on that step
 ///   BACK            -> return to the Kit clip view
+///   hold mute pad + select -> what decides that track's hits: all, or thinned by chaos sloth A, B or C
+///   SHIFT + select -> depth of that chaos thinning
 ///   SHIFT + mute pad -> switch that track's gate (upper pad) or CV (lower pad, tracks 1 and 2) to chaos or back
 ///   CV button       -> chaos pad view
 ///   KEYBOARD button -> Turing machine pitch generator (uses CV/gate 1 or 2)
@@ -156,6 +158,11 @@ private:
 		bool edited = false;
 	};
 	HeldPad heldPad_;
+
+	/// The track whose mute pad is held, or -1. Turning select while it is held picks that track's chaos probability
+	/// source; if it was turned, letting go doesn't toggle the mute.
+	int32_t heldMute_ = -1;
+	bool heldMuteEdited_ = false;
 
 	/// Sets or clears the gate event on one step, with undo support
 	void toggleStep(int32_t channel, int32_t step, bool clear);
