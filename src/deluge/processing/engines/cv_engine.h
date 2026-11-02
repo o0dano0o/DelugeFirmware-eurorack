@@ -111,6 +111,11 @@ public:
 	uint8_t getChaosOwnedGates() const { return chaosOwnedGate_; }
 	void sendChaosGate(uint8_t channel, bool high);
 
+	/// For displays: the last DAC code written to a CV channel (0 to 65535, 6552 per volt)
+	uint16_t getLastVoltageCode(uint8_t channel) const { return lastVoltageCode_[channel]; }
+	/// For displays: true while a gate is high, or for `holdMs` after it last went high (triggers are short)
+	bool gateRecentlyOn(uint8_t channel, int32_t holdMs) const;
+
 	inline bool isNoteOn(int32_t channel, int32_t note) {
 		return (gateChannels[channel].on && cvChannels[channel].noteCurrentlyPlaying == note);
 	}
@@ -124,6 +129,9 @@ private:
 	uint8_t chaosOwnedCV_{0};
 	uint8_t chaosOwnedGate_{0};
 	int32_t lastChaosCode_[NUM_PHYSICAL_CV_CHANNELS] = {-1, -1};
+	uint16_t lastVoltageCode_[NUM_PHYSICAL_CV_CHANNELS] = {0, 0};
+	uint32_t gateLastOnTime_[NUM_GATE_CHANNELS] = {};
+	bool gateEverOn_[NUM_GATE_CHANNELS] = {};
 	/// gate 1-4 as synths or drums
 	bool gateOutputPending{false};
 	/// gate 3 as a run signal

@@ -264,6 +264,9 @@ void CVEngine::sendChaosVoltage(uint8_t channel, uint16_t code) {
 }
 
 void CVEngine::sendVoltageOut(uint8_t channel, uint16_t voltage) {
+	if (channel < NUM_PHYSICAL_CV_CHANNELS) {
+		lastVoltageCode_[channel] = voltage;
+	}
 	uint32_t output = (uint32_t)(0b00110000 | (1 << channel)) << 24;
 	output |= (uint32_t)voltage << 8;
 	// if we have a physical oled then we need to send via the pic
@@ -276,7 +279,21 @@ void CVEngine::sendVoltageOut(uint8_t channel, uint16_t voltage) {
 	}
 }
 
+bool CVEngine::gateRecentlyOn(uint8_t channel, int32_t holdMs) const {
+	if (channel >= NUM_GATE_CHANNELS) {
+		return false;
+	}
+	if (gateChannels[channel].on) {
+		return true;
+	}
+	return gateEverOn_[channel] && (AudioEngine::audioSampleTimer - gateLastOnTime_[channel]) < (uint32_t)holdMs * 44;
+}
+
 void CVEngine::physicallySwitchGate(int32_t channel) {
+	if (gateChannels[channel].on) {
+		gateLastOnTime_[channel] = AudioEngine::audioSampleTimer;
+		gateEverOn_[channel] = true;
+	}
 	// setOutputState is inverted - sending true turns the gate off
 	int32_t on = gateChannels[channel].on == (gateChannels[channel].mode == GateType::S_TRIG);
 	setOutputState(gatePort[channel], gatePin[channel], on);

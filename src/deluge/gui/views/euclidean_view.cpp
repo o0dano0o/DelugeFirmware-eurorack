@@ -23,6 +23,7 @@
 #include "gui/ui/ui.h"
 #include "gui/views/chaos_view.h"
 #include "gui/views/instrument_clip_view.h"
+#include "gui/views/eurorack_view.h"
 #include "gui/views/turing_view.h"
 #include "gui/views/voice_view.h"
 #include "gui/ui_timer_manager.h"
@@ -756,8 +757,21 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		return ActionResult::DEALT_WITH;
 	}
 
-	// BACK, or SHIFT+CV again, returns to the normal Kit clip view
-	if (b == BACK || (b == CV && Buttons::isShiftButtonPressed())) {
+	// SHIFT+CV opens the Eurorack overview of which feature drives each output
+	if (b == CV && Buttons::isShiftButtonPressed()) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+			display->cancelPopup();
+			eurorackView.setReturnTo(this);
+			changeRootUI(&eurorackView);
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
+	// BACK returns to the normal Kit clip view
+	if (b == BACK) {
 		if (on) {
 			if (inCardRoutine) {
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;

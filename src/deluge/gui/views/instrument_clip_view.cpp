@@ -39,6 +39,7 @@
 #include "gui/ui_timer_manager.h"
 #include "gui/views/automation_view.h"
 #include "gui/views/euclidean_view.h"
+#include "gui/views/eurorack_view.h"
 #include "gui/views/timeline_view.h"
 #include "gui/views/view.h"
 #include "hid/buttons.h"
@@ -550,17 +551,15 @@ ActionResult InstrumentClipView::buttonAction(deluge::hid::Button b, bool on, bo
 		}
 	}
 
-	// SHIFT + CV: turn this clip into a four-gate "Euclid" clip and open the Euclidean view. A clip that isn't a Kit
-	// yet becomes one first; the view then creates the gate rows itself.
+	// SHIFT + CV: open the Eurorack overview (which feature drives each CV and gate output). From there KIT opens the
+	// Euclidean view.
 	else if (b == CV && Buttons::isShiftButtonPressed() && currentUIMode == UI_MODE_NONE) {
 		if (on) {
 			if (inCardRoutine) {
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
-
-			if (getCurrentOutputType() == OutputType::KIT || changeOutputType(OutputType::KIT)) {
-				changeRootUI(&euclideanView);
-			}
+			eurorackView.setReturnTo(&instrumentClipView);
+			changeRootUI(&eurorackView);
 		}
 	}
 
@@ -7943,4 +7942,12 @@ void InstrumentClipView::blinkSelectedNoteRow(int32_t whichMainRows) {
 	noteRowFlashOn = !noteRowFlashOn;
 	uiNeedsRendering(getRootUI(), whichMainRows, 0xFFFFFFFF);
 	uiTimerManager.setTimer(TimerName::NOTE_ROW_BLINK, 180);
+}
+
+/// Turns this clip into a four-gate "Euclid" clip and opens the Euclidean view. A clip that isn't a Kit yet becomes
+/// one first; the view then creates the gate rows itself.
+void InstrumentClipView::openEuclidean() {
+	if (getCurrentOutputType() == OutputType::KIT || changeOutputType(OutputType::KIT)) {
+		changeRootUI(&euclideanView);
+	}
 }

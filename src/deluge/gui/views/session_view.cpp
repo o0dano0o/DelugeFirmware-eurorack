@@ -43,6 +43,7 @@
 #include "gui/views/view.h"
 #include "gui/waveform/waveform_renderer.h"
 #include "hid/button.h"
+#include "gui/views/eurorack_view.h"
 #include "hid/buttons.h"
 #include "hid/display/display.h"
 #include "hid/display/oled.h"
@@ -648,6 +649,13 @@ doActualSimpleChange:
 	else if (b == MIDI) {
 		newOutputType = OutputType::MIDI_OUT;
 		goto changeOutputType;
+	}
+	// SHIFT + CV: open the Eurorack overview, which needs no clip (so it works from a blank song)
+	else if (b == CV && Buttons::isShiftButtonPressed()) {
+		if (on && currentUIMode == UI_MODE_NONE) {
+			eurorackView.setReturnTo(&sessionView);
+			changeRootUI(&eurorackView);
+		}
 	}
 	else if (b == CV) {
 		newOutputType = OutputType::CV;
