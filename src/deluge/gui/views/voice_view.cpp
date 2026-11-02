@@ -29,6 +29,8 @@
 #include "hid/display/oled.h"
 #include "hid/led/pad_leds.h"
 #include "model/clip/clip.h"
+#include "model/song/song.h"
+#include "processing/engines/audio_engine.h"
 #include "processing/engines/voice_runner.h"
 #include <algorithm>
 #include <cmath>
