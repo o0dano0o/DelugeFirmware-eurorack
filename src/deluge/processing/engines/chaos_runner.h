@@ -75,6 +75,8 @@ bool gateRecentlyHigh(int32_t gate, int32_t holdMs);
 /// Lets another generator (the Turing machine) claim CV and gate channels. Chaos can't take a claimed channel and
 /// gives up any it was using. Bit n is channel n (CV n and gate n).
 void setExternalOwnership(uint8_t cvBits, uint8_t gateBits);
+/// Same, for a numbered owner (0 Turing machine, 1 voice tracker) so two generators can each hold their own channel
+void setExternalOwnership(int32_t owner, uint8_t cvBits, uint8_t gateBits);
 
 /// Keeps the chaos engine running even when no output uses it, for generators that take their clock or randomness
 /// from it

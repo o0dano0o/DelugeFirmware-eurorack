@@ -24,6 +24,7 @@
 #include "gui/views/chaos_view.h"
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/turing_view.h"
+#include "gui/views/voice_view.h"
 #include "gui/views/view.h"
 #include "hid/button.h"
 #include "hid/buttons.h"
@@ -723,6 +724,18 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 			}
 			display->cancelPopup();
 			changeRootUI(&turingView);
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
+	// MIDI opens the live voice-to-CV pitch tracker
+	if (b == MIDI) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+			display->cancelPopup();
+			changeRootUI(&voiceView);
 		}
 		return ActionResult::DEALT_WITH;
 	}

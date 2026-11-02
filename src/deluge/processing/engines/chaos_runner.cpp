@@ -45,8 +45,10 @@ uint32_t lastSampleTimer = 0;
 float pendingSeconds = 0.0f;
 uint8_t lastGates = 0;
 uint8_t prevGateMask = 0; ///< gateMask as of the last apply(), to tell which gates were just claimed
-uint8_t extCV = 0;        ///< channels claimed by another generator
+uint8_t extCV = 0;        ///< channels claimed by other generators (all owners combined)
 uint8_t extGate = 0;
+uint8_t extCVBy[2] = {0, 0}; ///< per owner: 0 Turing machine, 1 voice tracker
+uint8_t extGateBy[2] = {0, 0};
 bool engineRequested = false;
 uint32_t riseCount[kNumGateRules] = {};
 uint32_t lastRise[kNumGateRules] = {};
@@ -174,11 +176,17 @@ bool allowNoteOn(int32_t gate) {
 	return roller.roll(probability::passProbability(x, probDepth));
 }
 
-void setExternalOwnership(uint8_t cvBits, uint8_t gateBits) {
+void setExternalOwnership(int32_t owner, uint8_t cvBits, uint8_t gateBits) {
 	bool was = engineWanted();
-	extCV = cvBits & ((1 << kNumCVOutputs) - 1);
-	extGate = gateBits & ((1 << kNumGateRules) - 1);
+	extCVBy[owner & 1] = cvBits & ((1 << kNumCVOutputs) - 1);
+	extGateBy[owner & 1] = gateBits & ((1 << kNumGateRules) - 1);
+	extCV = extCVBy[0] | extCVBy[1];
+	extGate = extGateBy[0] | extGateBy[1];
 	apply(was);
+}
+
+void setExternalOwnership(uint8_t cvBits, uint8_t gateBits) {
+	setExternalOwnership(0, cvBits, gateBits);
 }
 
 void requestEngine(bool wanted) {

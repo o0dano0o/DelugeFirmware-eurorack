@@ -74,6 +74,7 @@
 namespace params = deluge::modulation::params;
 
 extern "C" {
+#include "processing/engines/voice_runner.h"
 #include "RZA1/mtu/mtu.h"
 #include "drivers/ssi/ssi.h"
 
@@ -1158,6 +1159,18 @@ bool doSomeOutputting() {
 	i2sTXBufferPos = (uint32_t)i2sTXBufferPosNow;
 
 	if (numSamplesOutputted) {
+
+		// live voice tracker taps the input before the read position moves on (it handles wrap-around here)
+		if (deluge::voice::runner::isActive()) {
+			const int32_t* tapPos = (const int32_t*)i2sRXBufferPos;
+			int32_t framesLeft = numSamplesOutputted;
+			int32_t framesToEnd = ((uint32_t)getRxBufferEnd() - i2sRXBufferPos) >> (NUM_MONO_INPUT_CHANNELS_MAGNITUDE + 2);
+			int32_t first = framesLeft < framesToEnd ? framesLeft : framesToEnd;
+			deluge::voice::runner::feedInput(tapPos, first);
+			if (framesLeft > first) {
+				deluge::voice::runner::feedInput((const int32_t*)getRxBufferStart(), framesLeft - first);
+			}
+		}
 
 		i2sRXBufferPos += (numSamplesOutputted << (NUM_MONO_INPUT_CHANNELS_MAGNITUDE + 2));
 		if (i2sRXBufferPos >= (uint32_t)getRxBufferEnd()) {

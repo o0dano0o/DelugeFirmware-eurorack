@@ -67,6 +67,7 @@
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/turing_runner.h"
+#include "processing/engines/voice_runner.h"
 #include <new>
 #include <stdint.h>
 
@@ -1448,6 +1449,17 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("turing");
 	}
 
+	// live voice tracker (only when it is on)
+	if (deluge::voice::runner::isActive()) {
+		auto voice = deluge::voice::runner::getSettings();
+		writer.writeOpeningTag("voiceTrack");
+		writer.writeTag("channel", voice.channel);
+		writer.writeTag("quantise", voice.quantise ? 1 : 0);
+		writer.writeTag("octaveShift", voice.octaveShift);
+		writer.writeTag("sensitivity", voice.sensitivity);
+		writer.writeClosingTag("voiceTrack");
+	}
+
 	writer.writeClosingTag("song", true, true);
 }
 
@@ -1473,6 +1485,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	// A song without a chaos section leaves chaos off
 	deluge::chaos::runner::resetToDefaults();
 	deluge::turing::runner::resetToDefaults();
+	deluge::voice::runner::resetToDefaults();
 
 	// reverb mode is freeverb for songs that predate having multiple options. New songs will set it to mutable anyway
 	// so this is only used as a fallback
@@ -2040,6 +2053,28 @@ unknownTag:
 				}
 				reader.exitTag("turing", true);
 				deluge::turing::runner::loadSettings(turing);
+			}
+
+			else if (!strcmp(tagName, "voiceTrack")) {
+				deluge::voice::runner::Settings voice;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "channel")) {
+						voice.channel = static_cast<int8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "quantise")) {
+						voice.quantise = reader.readTagOrAttributeValueInt() != 0;
+					}
+					else if (!strcmp(tagName, "octaveShift")) {
+						voice.octaveShift = static_cast<int8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "sensitivity")) {
+						voice.sensitivity = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("voiceTrack", true);
+				deluge::voice::runner::loadSettings(voice);
 			}
 
 			else if (!strcmp(tagName, "sections")) {

@@ -16,6 +16,7 @@
  */
 
 #include "processing/engines/turing_runner.h"
+#include "processing/engines/voice_runner.h"
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
 #include "processing/engines/audio_engine.h"
@@ -182,6 +183,9 @@ void setChannel(int32_t channel) {
 		return;
 	}
 	releaseGate();
+	if (wanted >= 0 && deluge::voice::runner::getChannel() == wanted) {
+		deluge::voice::runner::setChannel(-1); // the voice tracker can't share the channel
+	}
 	settings.channel = wanted;
 	claimChannel();
 	updateChaosRequest();
