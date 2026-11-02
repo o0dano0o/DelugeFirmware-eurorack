@@ -46,6 +46,7 @@
 #include "playback/playback_handler.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/turing_runner.h"
+#include "processing/engines/voice_runner.h"
 #include "storage/storage_manager.h"
 #include "util/functions.h"
 #include <algorithm>
@@ -857,7 +858,18 @@ ActionResult EuclideanView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	// Euclidean pattern and chaos
 	if (x == kDisplayWidth && Buttons::isShiftButtonPressed()) {
 		char text[24];
-		if (y == topRowForChannel(channel)) {
+		bool generatorPad = (y == topRowForChannel(channel)
+		                     || (y == bottomRowForChannel(channel) && channel < deluge::chaos::kNumCVOutputs));
+		if (generatorPad && deluge::turing::runner::getChannel() == channel) {
+			// Hand a channel the Turing machine is using back to the Euclidean pattern
+			deluge::turing::runner::setChannel(-1);
+			snprintf(text, sizeof(text), "Turing off");
+		}
+		else if (generatorPad && deluge::voice::runner::getChannel() == channel) {
+			deluge::voice::runner::setChannel(-1);
+			snprintf(text, sizeof(text), "Voice off");
+		}
+		else if (y == topRowForChannel(channel)) {
 			bool chaos = !deluge::chaos::runner::isGateChaos(channel);
 			deluge::chaos::runner::setGateChaos(channel, chaos);
 			snprintf(text, sizeof(text), "Gate %d %s", static_cast<int>(channel + 1), chaos ? "chaos" : "euclid");
@@ -1257,10 +1269,17 @@ bool EuclideanView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth 
 				image[y][kDisplayWidth] = RGB{0, v, v};
 			}
 
-			// The Turing machine uses channel N's CV and gate as a voice: show both pads in orange
-			if (deluge::turing::runner::getChannel() == c
-			    && (y == topRowForChannel(c) || (y == bottomRowForChannel(c) && c < deluge::chaos::kNumCVOutputs))) {
-				image[y][kDisplayWidth] = deluge::turing::runner::stepRecently(120) ? RGB{255, 220, 120} : RGB{255, 120, 0};
+			// The Turing machine uses channel N's CV and gate as a voice: both pads green (flashing paler on each step).
+			// Green rather than orange, which is too close to the muted colour.
+			bool generatorPad = (y == topRowForChannel(c) || (y == bottomRowForChannel(c) && c < deluge::chaos::kNumCVOutputs));
+			if (generatorPad && deluge::turing::runner::getChannel() == c) {
+				image[y][kDisplayWidth] =
+				    deluge::turing::runner::stepRecently(120) ? RGB{210, 255, 210} : RGB{30, 220, 40};
+			}
+			// The live voice tracker likewise: both pads pink, brighter while a note is held
+			if (generatorPad && deluge::voice::runner::getChannel() == c) {
+				image[y][kDisplayWidth] =
+				    deluge::voice::runner::gateOn() ? RGB{255, 190, 220} : RGB{255, 40, 110};
 			}
 
 			// Page pad (second sidebar column): upper pad = steps 1-32, lower pad = steps 33-64, lit for the page
@@ -1294,7 +1313,7 @@ void EuclideanView::graphicsRoutine() {
 
 	// Generator indicators in the mute column: redraw when a chaos gate flips, a CV level moves a step, or the Turing
 	// machine steps
-	if (deluge::chaos::runner::isActive() || deluge::turing::runner::isActive()) {
+	if (deluge::chaos::runner::isActive() || deluge::turing::runner::isActive() || deluge::voice::runner::isActive()) {
 		auto& chaosEngine = deluge::chaos::runner::engine();
 		uint32_t signature = chaosEngine.getGateLevels();
 		for (int32_t cv = 0; cv < deluge::chaos::kNumCVOutputs; cv++) {
@@ -1302,6 +1321,9 @@ void EuclideanView::graphicsRoutine() {
 		}
 		if (deluge::turing::runner::stepRecently(120)) {
 			signature |= 1u << 24;
+		}
+		if (deluge::voice::runner::gateOn()) {
+			signature |= 1u << 25;
 		}
 		if (signature != lastChaosSignature_) {
 			lastChaosSignature_ = signature;

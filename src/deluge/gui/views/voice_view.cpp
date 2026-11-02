@@ -76,9 +76,6 @@ int32_t levelPads(float level) {
 } // namespace
 
 bool VoiceView::opened() {
-	if (!runner::isActive()) {
-		runner::setChannel(1);
-	}
 	focusRegained();
 	return true;
 }
@@ -98,7 +95,7 @@ void VoiceView::focusRegained() {
 		renderUIsForOled();
 	}
 	else {
-		display->setScrollingText("VOICE");
+		display->setScrollingText(runner::isActive() ? "VOICE" : "VOICE OFF  CV TO START");
 	}
 	uiNeedsRendering(this);
 }

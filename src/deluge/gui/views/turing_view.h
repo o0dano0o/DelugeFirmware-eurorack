@@ -38,7 +38,7 @@
 ///   CV button            channel: off, CV/gate 1, CV/gate 2
 ///   BACK                 return to the Euclidean view
 ///
-/// Entered with the KEYBOARD button from the Euclidean view. Opening it switches the Turing machine on (CV/gate 1) if
+/// Entered with the KEYBOARD button from the Euclidean view. It starts off: press the CV button to switch it on at CV/gate 1, 2 (and off again).
 /// it was off.
 class TuringView final : public ClipView {
 public:

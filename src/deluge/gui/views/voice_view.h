@@ -35,7 +35,7 @@
 ///   CV button            channel: off, CV/gate 1, CV/gate 2
 ///   BACK                 return to the Euclidean view
 ///
-/// Entered with the MIDI button from the Euclidean view. Opening it switches the tracker on (CV/gate 2) if it was off.
+/// Entered with the MIDI button from the Euclidean view. It starts off: press the CV button to switch it on at CV/gate 1, 2 (and off again).
 class VoiceView final : public ClipView {
 public:
 	VoiceView() = default;

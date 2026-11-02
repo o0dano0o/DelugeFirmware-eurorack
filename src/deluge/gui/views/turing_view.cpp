@@ -61,9 +61,6 @@ char const* const kClockShort[] = {"Song", "Lobe", "Loop"};
 } // namespace
 
 bool TuringView::opened() {
-	if (!runner::isActive()) {
-		runner::setChannel(0);
-	}
 	focusRegained();
 	return true;
 }
@@ -84,7 +81,7 @@ void TuringView::focusRegained() {
 		renderUIsForOled();
 	}
 	else {
-		display->setScrollingText("TURING");
+		display->setScrollingText(runner::isActive() ? "TURING" : "TURING OFF  CV TO START");
 	}
 	uiNeedsRendering(this);
 }
