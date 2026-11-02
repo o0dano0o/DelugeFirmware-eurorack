@@ -124,3 +124,18 @@ TEST(TuringEngineTests, emptyScaleMeansChromatic) {
 	CHECK_EQUAL(11, TuringEngine::noteOffsetFromValue(255, 0, 1));
 	CHECK_EQUAL(23, TuringEngine::noteOffsetFromValue(255, 0, 2));
 }
+
+TEST(TuringEngineTests, shortLoopsStillSpanTheWholeValueRange) {
+	TuringEngine t;
+	t.setLength(5);
+	t.setRegister(0x1F);
+	CHECK_EQUAL(0xF8, t.getValue());
+	t.setRegister(0x01);
+	CHECK_EQUAL(0x08, t.getValue());
+	t.setLength(2);
+	t.setRegister(0x3);
+	CHECK_EQUAL(0xC0, t.getValue());
+	t.setLength(12);
+	t.setRegister(0xABC);
+	CHECK_EQUAL(0xBC, t.getValue());
+}

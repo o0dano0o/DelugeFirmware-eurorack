@@ -57,8 +57,12 @@ public:
 	/// probability. Returns true if the bit was flipped.
 	bool clock(float rnd);
 
-	/// The low 8 bits of the register, 0 to 255
-	uint8_t getValue() const { return static_cast<uint8_t>(register_ & 0xFF); }
+	/// The register as an 8 bit value, 0 to 255. Loops shorter than 8 bits are shifted up so they still span the whole
+	/// range (a 5 bit loop would otherwise never get above 31 and sit in the bottom of the pitch range).
+	uint8_t getValue() const {
+		return length_ >= 8 ? static_cast<uint8_t>(register_ & 0xFF)
+		                    : static_cast<uint8_t>((register_ << (8 - length_)) & 0xFF);
+	}
 
 	/// Turns a value into a note offset in semitones above the root. `scaleBits` has bit n set if semitone n of the
 	/// octave belongs to the scale (bit 0 is the root); an empty set means all twelve semitones. The value is spread
