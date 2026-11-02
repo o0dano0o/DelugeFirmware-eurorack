@@ -26,7 +26,8 @@
 /// Main grid:
 ///   top row      the shift register, one pad per bit (bright = 1, dim = 0, dark beyond the loop length). New bits
 ///                enter at the left and move right as the clock steps. Tap a pad to flip that bit.
-///   lower rows   the last 16 notes as a dot plot, newest on the right, higher notes higher up
+///   lower rows   the last 16 notes as a dot plot, newest on the right, higher notes higher up. An orange pad above
+///                the plot and a faint column mark the first step of each pass through the loop
 /// Sidebar: left column is the flip probability (empty = locked loop, half = fully random, full = always flips),
 ///   right column is the current note.
 ///

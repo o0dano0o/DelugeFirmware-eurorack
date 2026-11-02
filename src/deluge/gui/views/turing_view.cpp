@@ -53,6 +53,9 @@ constexpr int32_t kPlotRows = kDisplayHeight - 2; ///< rows 0 to 5 hold the dot 
 const RGB kBitOn{255, 170, 40};
 const RGB kBitOff{18, 12, 4};
 const RGB kPlotColour{60, 200, 255};
+const RGB kLoopStartColour{255, 140, 0}; ///< marker above the plot where a pass through the loop begins
+const RGB kLoopStartTint{14, 10, 22};   ///< faint column behind the notes of a loop's first step
+constexpr int32_t kMarkerRow = kDisplayHeight - 2;
 const RGB kProbabilityColour{255, 90, 200};
 const RGB kNoteColour{0, 210, 225};
 
@@ -134,6 +137,18 @@ bool TuringView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + 
 		int32_t age = runner::kHistoryLength - 1 - col;
 		if (static_cast<uint32_t>(age) >= runner::getStepCount()) {
 			continue;
+		}
+		// the first step of each pass through the loop gets a marker and a faint column behind its dot
+		int32_t length = runner::engine().getLength();
+		if ((runner::getStepCount() - 1 - age) % length == 0) {
+			if (whichRows & (1 << kMarkerRow)) {
+				image[kMarkerRow][col] = kLoopStartColour;
+			}
+			for (int32_t r = 0; r < kPlotRows; r++) {
+				if (whichRows & (1 << r)) {
+					image[r][col] = kLoopStartTint;
+				}
+			}
 		}
 		int32_t value = runner::getHistoryValue(age);
 		int32_t row = std::min(kPlotRows - 1, value * kPlotRows / 256);
