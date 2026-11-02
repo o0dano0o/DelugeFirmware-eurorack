@@ -16,6 +16,7 @@
  */
 
 #include "processing/engines/audio_engine.h"
+#include "processing/engines/voice_runner.h"
 
 #include "chrono"
 #include "definitions.h"
@@ -74,7 +75,6 @@
 namespace params = deluge::modulation::params;
 
 extern "C" {
-#include "processing/engines/voice_runner.h"
 #include "RZA1/mtu/mtu.h"
 #include "drivers/ssi/ssi.h"
 
