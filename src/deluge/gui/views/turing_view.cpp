@@ -347,6 +347,20 @@ ActionResult TuringView::buttonAction(deluge::hid::Button b, bool on, bool inCar
 }
 
 ActionResult TuringView::padAction(int32_t x, int32_t y, int32_t velocity) {
+	// tap the probability column to set the flip probability: the pad you press becomes the top of the bar, and
+	// tapping the top pad of a lit bar again locks the loop (0)
+	if (velocity && x == kDisplayWidth && y >= 0 && y < kDisplayHeight) {
+		int32_t lit = static_cast<int32_t>(runner::engine().getFlipProbability() * kDisplayHeight + 0.5f);
+		float p = (lit == y + 1) ? 0.0f : static_cast<float>(y + 1) / kDisplayHeight;
+		runner::setFlipProbability(p);
+		int32_t percent = static_cast<int32_t>(runner::engine().getFlipProbability() * 100.0f + 0.5f);
+		char text[24];
+		snprintf(text, sizeof(text), display->haveOLED() ? "Flip %d%%" : "P%d", static_cast<int>(percent));
+		showValuePopup(text);
+		refreshOLED();
+		uiNeedsRendering(this);
+		return ActionResult::DEALT_WITH;
+	}
 	// tap a bit of the register to flip it
 	if (velocity && y == kRegisterRow && x < runner::engine().getLength()) {
 		auto& e = runner::engine();

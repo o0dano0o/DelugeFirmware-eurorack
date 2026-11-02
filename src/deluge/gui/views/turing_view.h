@@ -30,6 +30,7 @@
 ///                the plot and a faint column mark the first step of each pass through the loop
 /// Sidebar: left column is the flip probability (empty = locked loop, half = fully random, full = always flips),
 ///   right column is the current note.
+///   Tap a pad in the probability column to set it (pad N of 8 = N/8); tap the top lit pad again to lock the loop.
 ///
 /// Controls:
 ///   upper black encoder  flip probability       lower black encoder  loop length (2 to 16)
