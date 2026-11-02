@@ -27,6 +27,8 @@
 ///   pads 1-4 (left)   who drives the output: Euclid (white), Chaos (purple), Turing machine (green), voice tracker
 ///                     (pink). The current owner is bright. Press a pad to hand the output to that feature. Turing and
 ///                     voice use a CV and gate pair, so they only exist on channel 1 and 2.
+///   mute column       (second from the right) green = sounding, red = muted. A muted gate stays low; a muted CV
+///                     freezes at its voltage. Saved with the song. Not available on outputs used for clock/run
 ///   pads 6-16         a live meter: for a gate it lights fully while the gate is high (and half for a moment after);
 ///                     for a CV it is a bar showing the voltage, 0 to 10 V
 ///

@@ -263,8 +263,34 @@ void CVEngine::sendChaosVoltage(uint8_t channel, uint16_t code) {
 	sendVoltageOut(channel, code);
 }
 
+void CVEngine::setMutedGates(uint8_t mask) {
+	mask &= (1 << NUM_GATE_CHANNELS) - 1;
+	uint8_t changed = mutedGates_ ^ mask;
+	mutedGates_ = mask;
+	for (uint8_t ch = 0; ch < NUM_GATE_CHANNELS; ch++) {
+		if (changed & (1 << ch)) {
+			physicallySwitchGate(ch);
+		}
+	}
+}
+
+void CVEngine::setMutedCV(uint8_t mask) {
+	mask &= (1 << NUM_PHYSICAL_CV_CHANNELS) - 1;
+	uint8_t unmuted = mutedCV_ & ~mask;
+	mutedCV_ = mask;
+	for (uint8_t ch = 0; ch < NUM_PHYSICAL_CV_CHANNELS; ch++) {
+		if (unmuted & (1 << ch)) {
+			sendVoltageOut(ch, wantedVoltageCode_[ch]);
+		}
+	}
+}
+
 void CVEngine::sendVoltageOut(uint8_t channel, uint16_t voltage) {
 	if (channel < NUM_PHYSICAL_CV_CHANNELS) {
+		wantedVoltageCode_[channel] = voltage;
+		if (mutedCV_ & (1 << channel)) {
+			return;
+		}
 		lastVoltageCode_[channel] = voltage;
 	}
 	uint32_t output = (uint32_t)(0b00110000 | (1 << channel)) << 24;
@@ -283,6 +309,9 @@ bool CVEngine::gateRecentlyOn(uint8_t channel, int32_t holdMs) const {
 	if (channel >= NUM_GATE_CHANNELS) {
 		return false;
 	}
+	if (mutedGates_ & (1 << channel)) {
+		return false;
+	}
 	if (gateChannels[channel].on) {
 		return true;
 	}
@@ -290,12 +319,13 @@ bool CVEngine::gateRecentlyOn(uint8_t channel, int32_t holdMs) const {
 }
 
 void CVEngine::physicallySwitchGate(int32_t channel) {
-	if (gateChannels[channel].on) {
+	bool high = gateChannels[channel].on && !(mutedGates_ & (1 << channel));
+	if (high) {
 		gateLastOnTime_[channel] = AudioEngine::audioSampleTimer;
 		gateEverOn_[channel] = true;
 	}
 	// setOutputState is inverted - sending true turns the gate off
-	int32_t on = gateChannels[channel].on == (gateChannels[channel].mode == GateType::S_TRIG);
+	int32_t on = high == (gateChannels[channel].mode == GateType::S_TRIG);
 	setOutputState(gatePort[channel], gatePin[channel], on);
 }
 

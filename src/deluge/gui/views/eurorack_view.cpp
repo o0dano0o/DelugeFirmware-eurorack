@@ -118,6 +118,11 @@ bool canOwn(int32_t output, Owner owner) {
 	return true;
 }
 
+bool isMuted(int32_t output) {
+	uint8_t mask = isGate(output) ? cvEngine.getMutedGates() : cvEngine.getMutedCV();
+	return mask & (1 << channelOf(output));
+}
+
 } // namespace
 
 bool EurorackView::opened() {
@@ -143,6 +148,7 @@ void EurorackView::graphicsRoutine() {
 	uint32_t signature = 0;
 	for (int32_t output = 0; output < kNumOutputs; output++) {
 		signature = signature * 31 + ownerOf(output);
+		signature = signature * 2 + (isMuted(output) ? 1 : 0);
 		int32_t channel = channelOf(output);
 		if (isGate(output)) {
 			bool on = cvEngine.gateChannels[channel].on;
@@ -193,7 +199,7 @@ bool EurorackView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth 
 
 			int32_t channel = channelOf(output);
 			if (isGate(output)) {
-				bool on = cvEngine.gateChannels[channel].on;
+				bool on = cvEngine.gateChannels[channel].on && !isMuted(output);
 				bool recent = cvEngine.gateRecentlyOn(channel, kHoldMs);
 				RGB c = on ? ownerColour : (recent ? ownerColour.transform([](uint8_t v) { return v / 3; })
 				                                   : ownerColour.transform([](uint8_t v) { return v / 20; }));
@@ -226,6 +232,11 @@ bool EurorackView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth +
 			continue;
 		}
 		std::fill(image[y] + kDisplayWidth, image[y] + kDisplayWidth + kSideBarWidth, colours::black);
+		// mute pad (the usual mute column): green = sounding, red = muted
+		int32_t output = outputForRow(y);
+		if (output >= 0 && ownerOf(output) != SYSTEM) {
+			image[y][kDisplayWidth] = isMuted(output) ? RGB{255, 0, 0} : RGB{0, 90, 0};
+		}
 		if (occupancyMask) {
 			memset(occupancyMask[y] + kDisplayWidth, 0, kSideBarWidth);
 		}
@@ -262,6 +273,28 @@ void EurorackView::renderOLED(deluge::hid::display::oled_canvas::Canvas& canvas)
 
 ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	if (!velocity) {
+		return ActionResult::DEALT_WITH;
+	}
+	// The mute column toggles the mute of that output
+	if (x == kDisplayWidth) {
+		int32_t output = outputForRow(y);
+		if (output >= 0 && ownerOf(output) != SYSTEM) {
+			int32_t channel = channelOf(output);
+			bool muted = !isMuted(output);
+			if (isGate(output)) {
+				uint8_t m = cvEngine.getMutedGates();
+				cvEngine.setMutedGates(muted ? (m | (1 << channel)) : (m & ~(1 << channel)));
+			}
+			else {
+				uint8_t m = cvEngine.getMutedCV();
+				cvEngine.setMutedCV(muted ? (m | (1 << channel)) : (m & ~(1 << channel)));
+			}
+			char text[40];
+			snprintf(text, sizeof(text), "%s%d %s", isGate(output) ? "Gate " : "CV ", static_cast<int>(channel + 1),
+			         muted ? "muted" : "on");
+			showNotice(text);
+			uiNeedsRendering(this);
+		}
 		return ActionResult::DEALT_WITH;
 	}
 	// Tapping the meter part of a row opens the feature that drives that output

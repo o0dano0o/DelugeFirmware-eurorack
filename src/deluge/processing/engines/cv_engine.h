@@ -111,6 +111,13 @@ public:
 	uint8_t getChaosOwnedGates() const { return chaosOwnedGate_; }
 	void sendChaosGate(uint8_t channel, bool high);
 
+	/// Output mutes (set from the Eurorack overview). A muted gate stays low whatever drives it. A muted CV freezes at
+	/// the voltage it had; the latest requested voltage is applied again when it is unmuted.
+	void setMutedGates(uint8_t mask);
+	void setMutedCV(uint8_t mask);
+	uint8_t getMutedGates() const { return mutedGates_; }
+	uint8_t getMutedCV() const { return mutedCV_; }
+
 	/// For displays: the last DAC code written to a CV channel (0 to 65535, 6552 per volt)
 	uint16_t getLastVoltageCode(uint8_t channel) const { return lastVoltageCode_[channel]; }
 	/// For displays: true while a gate is high, or for `holdMs` after it last went high (triggers are short)
@@ -130,6 +137,9 @@ private:
 	uint8_t chaosOwnedGate_{0};
 	int32_t lastChaosCode_[NUM_PHYSICAL_CV_CHANNELS] = {-1, -1};
 	uint16_t lastVoltageCode_[NUM_PHYSICAL_CV_CHANNELS] = {0, 0};
+	uint16_t wantedVoltageCode_[NUM_PHYSICAL_CV_CHANNELS] = {0, 0};
+	uint8_t mutedGates_ = 0;
+	uint8_t mutedCV_ = 0;
 	uint32_t gateLastOnTime_[NUM_GATE_CHANNELS] = {};
 	bool gateEverOn_[NUM_GATE_CHANNELS] = {};
 	/// gate 1-4 as synths or drums
