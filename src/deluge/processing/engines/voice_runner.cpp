@@ -48,6 +48,35 @@ int32_t lastNote = -1;
 uint32_t voicedCountdown = 0;
 float level = 0.0f;
 
+constexpr int32_t kEstimatesPerSlot = 21; ///< about 245 ms
+int32_t history[kHistoryLength];
+int32_t estimatesInSlot = 0;
+uint32_t historyChanges = 0;
+
+void clearHistory() {
+	for (int32_t& n : history) {
+		n = -1;
+	}
+	estimatesInSlot = 0;
+	historyChanges++;
+}
+
+void updateHistory(bool gate, int32_t note) {
+	int32_t& current = history[kHistoryLength - 1];
+	if (gate && current != note) {
+		current = note;
+		historyChanges++;
+	}
+	if (++estimatesInSlot >= kEstimatesPerSlot) {
+		estimatesInSlot = 0;
+		for (int32_t i = 0; i + 1 < kHistoryLength; i++) {
+			history[i] = history[i + 1];
+		}
+		history[kHistoryLength - 1] = -1;
+		historyChanges++;
+	}
+}
+
 void releaseChannel(int32_t channel) {
 	if (channel >= 0) {
 		CVEngine& cv = cvEngine;
@@ -126,6 +155,7 @@ void setChannel(int32_t channel) {
 		lastNote = -1;
 		voicedCountdown = 0;
 		level = 0.0f;
+		clearHistory();
 	}
 	claim();
 }
@@ -203,6 +233,7 @@ void tick() {
 				voicedCountdown--;
 			}
 			bool newNote = follower.update(r);
+			updateHistory(follower.gate(), follower.note());
 			if (follower.gate() != gateSent) {
 				if (follower.gate()) {
 					outputPitch();
@@ -235,6 +266,17 @@ int32_t currentNote() {
 
 float currentLevel() {
 	return level;
+}
+
+int32_t historyNote(int32_t age) {
+	if (settings.channel < 0 || age < 0 || age >= kHistoryLength) {
+		return -1;
+	}
+	return history[kHistoryLength - 1 - age];
+}
+
+uint32_t historyVersion() {
+	return historyChanges;
 }
 
 bool recentlyVoiced() {

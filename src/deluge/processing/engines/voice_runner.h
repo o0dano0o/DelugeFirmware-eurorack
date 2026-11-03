@@ -58,4 +58,11 @@ int32_t currentNote();       ///< MIDI note number of the held note, -1 before a
 float currentLevel();        ///< 0 to 1
 bool recentlyVoiced();       ///< true for a moment after a pitch was last heard
 
+/// Note history for the display: kHistoryLength slots, each about a quarter of a second, the newest last.
+constexpr int32_t kHistoryLength = 16;
+/// The note sung during slot `age` slots ago (0 is the slot in progress), or -1 for silence
+int32_t historyNote(int32_t age);
+/// Increases every time the history changes, for cheap redraw checks
+uint32_t historyVersion();
+
 } // namespace deluge::voice::runner

@@ -57,6 +57,10 @@ const RGB kNoteSharpDim{6, 6, 10};
 const RGB kNoteLit{255, 255, 255};
 const RGB kGateColour{255, 60, 60};
 const RGB kOctaveColour{60, 140, 255};
+const RGB kHistoryColour{50, 190, 230};
+constexpr int32_t kHistoryRows = kDisplayHeight - 2; ///< rows 0 to 5 hold the note history
+constexpr int32_t kHistoryLowNote = 40;              ///< E2, bottom of the history plot
+constexpr int32_t kSemitonesPerHistoryRow = 6;       ///< so the plot spans three octaves
 
 char const* const kNoteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
@@ -105,7 +109,10 @@ void VoiceView::graphicsRoutine() {
 	int32_t levelNow = levelPads(runner::currentLevel());
 	int32_t noteNow = runner::recentlyVoiced() ? runner::currentNote() : -1;
 	bool gate = runner::gateOn();
-	if (levelNow != lastDrawnLevel_ || noteNow != lastDrawnNote_ || gate != lastDrawnGate_) {
+	uint32_t historyNow = runner::historyVersion();
+	if (levelNow != lastDrawnLevel_ || noteNow != lastDrawnNote_ || gate != lastDrawnGate_
+	    || historyNow != lastDrawnHistory_) {
+		lastDrawnHistory_ = historyNow;
 		lastDrawnLevel_ = levelNow;
 		lastDrawnNote_ = noteNow;
 		lastDrawnGate_ = gate;
@@ -150,6 +157,20 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 			for (int32_t o = 0; o <= octave; o++) {
 				image[kNoteRow][12 + o] = kOctaveColour;
 			}
+		}
+	}
+
+	// note history, oldest on the left, higher notes higher up; the slot in progress is white
+	for (int32_t col = 0; col < runner::kHistoryLength && col < kDisplayWidth; col++) {
+		int32_t age = runner::kHistoryLength - 1 - col;
+		int32_t note = runner::historyNote(age);
+		if (note < 0) {
+			continue;
+		}
+		int32_t row = (note - kHistoryLowNote) / kSemitonesPerHistoryRow;
+		row = std::max<int32_t>(0, std::min<int32_t>(row, kHistoryRows - 1));
+		if (whichRows & (1 << row)) {
+			image[row][col] = (age == 0) ? RGB{255, 255, 255} : kHistoryColour;
 		}
 	}
 
