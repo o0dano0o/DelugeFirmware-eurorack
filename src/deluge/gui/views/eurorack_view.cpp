@@ -413,6 +413,11 @@ ActionResult EurorackView::buttonAction(deluge::hid::Button b, bool on, bool inC
 		return ActionResult::DEALT_WITH;
 	}
 
+	// Save and load are handled by the common view code, which opens the save/load browsers
+	if (b == SAVE || b == LOAD) {
+		return view.buttonAction(b, on, inCardRoutine);
+	}
+
 	return UI::buttonAction(b, on, inCardRoutine);
 }
 
