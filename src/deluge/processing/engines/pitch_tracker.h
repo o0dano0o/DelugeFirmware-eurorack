@@ -30,6 +30,10 @@ constexpr float kAnalysisRate = kInputSampleRate / kDecimation; ///< 11025 Hz
 constexpr int32_t kMinTau = 11;                                  ///< highest pitch about 1000 Hz
 constexpr int32_t kMaxTau = 150;                                 ///< lowest pitch about 73 Hz
 constexpr int32_t kWindow = 384;                                 ///< samples the difference function is summed over
+// high range (whistling), analysed at the full input rate: about 735 Hz to 4.9 kHz
+constexpr int32_t kHighMinTau = 9;
+constexpr int32_t kHighMaxTau = 60;
+constexpr int32_t kHighWindow = 256;
 constexpr int32_t kHop = 128;                                    ///< analysis every 128 analysis samples, ~11.6 ms
 
 /// One pitch estimate
@@ -60,6 +64,8 @@ public:
 private:
 	void pushDecimated(float sample);
 	void analyse();
+	/// Second YIN at the full rate for pitches above the main range; true if it found one
+	bool analyseHigh(PitchResult& result);
 
 	// two cascaded [1 2 1] / 4 low-pass-and-halve stages
 	float stage1_[2] = {0, 0};
@@ -75,6 +81,12 @@ private:
 	float frame_[kWindow + kMaxTau + 1] = {};
 	float difference_[kMaxTau + 1] = {};
 	float normalised_[kMaxTau + 1] = {};
+
+	static constexpr int32_t kRawSize = 512; ///< power of two, holds more than kHighWindow + kHighMaxTau
+	float raw_[kRawSize] = {};
+	uint32_t rawWritten_ = 0;
+	float highFrame_[kHighWindow + kHighMaxTau + 1] = {};
+	float highNormalised_[kHighMaxTau + 1] = {};
 
 	float levelThreshold_ = 0.01f;
 	PitchResult latest_;

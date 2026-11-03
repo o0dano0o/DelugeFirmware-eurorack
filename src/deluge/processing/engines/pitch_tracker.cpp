@@ -39,6 +39,10 @@ void PitchTracker::reset() {
 	}
 	written_ = 0;
 	sinceAnalysis_ = 0;
+	rawWritten_ = 0;
+	for (float& v : raw_) {
+		v = 0.0f;
+	}
 	latest_ = PitchResult{};
 }
 
@@ -52,6 +56,8 @@ int32_t PitchTracker::feed(const float* samples, int32_t count) {
 	int32_t produced = 0;
 	for (int32_t i = 0; i < count; i++) {
 		float x = samples[i];
+		raw_[rawWritten_ & (kRawSize - 1)] = x;
+		rawWritten_++;
 
 		// stage 1: [1 2 1] / 4 smoothing, keep every second output
 		float y1 = 0.25f * (stage1_[0] + 2.0f * stage1_[1] + x);
@@ -144,6 +150,8 @@ void PitchTracker::analyse() {
 	}
 	if (best < 0 || normalised_[best] > kVoicedLimit) {
 		result.confidence = best < 0 ? 0.0f : 1.0f - normalised_[best];
+		// nothing in the main range: it may be a whistle
+		analyseHigh(result);
 		latest_ = result;
 		return;
 	}
@@ -163,7 +171,74 @@ void PitchTracker::analyse() {
 	result.frequency = kAnalysisRate / tauEstimate;
 	result.confidence = 1.0f - normalised_[best];
 	result.voiced = true;
+	// a whistle can be mistaken for a lower pitch: a 2.6 kHz tone repeats every 4.2 samples here, but so does it every
+	// 17, which is a "pitch" of 650 Hz. So also look at the full rate: if that finds a clean pitch which is a whole
+	// number of times the main estimate (or the main estimate is already up in the high range), take it.
+	{
+		PitchResult high = result;
+		if (analyseHigh(high)) {
+			float ratio = high.frequency / result.frequency;
+			float nearest = std::floor(ratio + 0.5f);
+			bool subharmonic = nearest >= 2.0f && nearest <= 6.0f && std::fabs(ratio - nearest) < 0.03f * nearest;
+			if (result.frequency > 700.0f || subharmonic) {
+				result = high;
+			}
+		}
+	}
 	latest_ = result;
+}
+
+bool PitchTracker::analyseHigh(PitchResult& result) {
+	constexpr int32_t frameLength = kHighWindow + kHighMaxTau;
+	uint32_t start = rawWritten_ - frameLength;
+	for (int32_t i = 0; i < frameLength; i++) {
+		highFrame_[i] = raw_[(start + i) & (kRawSize - 1)];
+	}
+
+	float running = 0.0f;
+	highNormalised_[0] = 1.0f;
+	for (int32_t tau = 1; tau <= kHighMaxTau; tau++) {
+		float sum = 0.0f;
+		for (int32_t j = 0; j < kHighWindow; j++) {
+			float d = highFrame_[j] - highFrame_[j + tau];
+			sum += d * d;
+		}
+		running += sum;
+		highNormalised_[tau] = (running > 1.0e-12f) ? sum * tau / running : 1.0f;
+	}
+
+	int32_t best = -1;
+	for (int32_t tau = kHighMinTau; tau <= kHighMaxTau; tau++) {
+		if (highNormalised_[tau] < kYinThreshold) {
+			while (tau + 1 <= kHighMaxTau && highNormalised_[tau + 1] < highNormalised_[tau]) {
+				tau++;
+			}
+			best = tau;
+			break;
+		}
+	}
+	// no fallback to the global minimum here: a whistle is clean, and anything else should stay unvoiced
+	if (best < 0 || highNormalised_[best] > kVoicedLimit) {
+		return false;
+	}
+	float tauEstimate = static_cast<float>(best);
+	if (best > kHighMinTau && best < kHighMaxTau) {
+		float s0 = highNormalised_[best - 1];
+		float s1 = highNormalised_[best];
+		float s2 = highNormalised_[best + 1];
+		float denominator = s0 - 2.0f * s1 + s2;
+		if (denominator > 1.0e-9f) {
+			tauEstimate += 0.5f * (s0 - s2) / denominator;
+		}
+	}
+	float frequency = kInputSampleRate / tauEstimate;
+	if (frequency < 700.0f) {
+		return false;
+	}
+	result.frequency = frequency;
+	result.confidence = 1.0f - highNormalised_[best];
+	result.voiced = true;
+	return true;
 }
 
 float frequencyToNote(float frequency) {

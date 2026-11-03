@@ -160,14 +160,28 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 		}
 	}
 
-	// note history, oldest on the left, higher notes higher up; the slot in progress is white
+	// note history, oldest on the left, higher notes higher up; the slot in progress is white. The plot covers three
+	// octaves starting at the octave of the lowest note in view, so whistling shows up as well as singing.
+	int32_t historyLow = kHistoryLowNote;
+	{
+		int32_t lowest = 1000;
+		for (int32_t age = 0; age < runner::kHistoryLength; age++) {
+			int32_t n = runner::historyNote(age);
+			if (n >= 0 && n < lowest) {
+				lowest = n;
+			}
+		}
+		if (lowest < 1000) {
+			historyLow = std::max<int32_t>(0, lowest / 12 * 12);
+		}
+	}
 	for (int32_t col = 0; col < runner::kHistoryLength && col < kDisplayWidth; col++) {
 		int32_t age = runner::kHistoryLength - 1 - col;
 		int32_t note = runner::historyNote(age);
 		if (note < 0) {
 			continue;
 		}
-		int32_t row = (note - kHistoryLowNote) / kSemitonesPerHistoryRow;
+		int32_t row = (note - historyLow) / kSemitonesPerHistoryRow;
 		row = std::max<int32_t>(0, std::min<int32_t>(row, kHistoryRows - 1));
 		if (whichRows & (1 << row)) {
 			image[row][col] = (age == 0) ? RGB{255, 255, 255} : kHistoryColour;

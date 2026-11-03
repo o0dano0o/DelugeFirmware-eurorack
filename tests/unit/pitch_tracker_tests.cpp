@@ -59,6 +59,38 @@ TEST(PitchTrackerTests, sineWavesAcrossTheVocalRange) {
 	}
 }
 
+TEST(PitchTrackerTests, whistlingAboveOneKilohertzIsTracked) {
+	for (float f : {1046.5f, 1318.5f, 1760.0f, 2093.0f, 2637.0f, 3136.0f}) {
+		PitchTracker t;
+		auto results = runTracker(t, tone(f, 0.6f, 0.1f));
+		CHECK_TRUE(results.size() > 20);
+		for (size_t i = 5; i < results.size(); i++) {
+			CHECK_TRUE(results[i].voiced);
+			DOUBLES_EQUAL(noteOf(f), noteOf(results[i].frequency), 0.3);
+		}
+	}
+}
+
+TEST(PitchTrackerTests, whistleWithBreathNoiseIsTracked) {
+	unsigned seed = 7;
+	for (float f : {1400.0f, 2200.0f}) {
+		PitchTracker t;
+		auto audio = tone(f, 0.8f, 0.1f);
+		for (float& v : audio) {
+			seed = seed * 1664525u + 1013904223u;
+			v += 0.02f * (static_cast<float>(seed >> 8) / 16777216.0f - 0.5f);
+		}
+		auto results = runTracker(t, audio);
+		int good = 0;
+		for (size_t i = 5; i < results.size(); i++) {
+			if (results[i].voiced && std::fabs(noteOf(f) - noteOf(results[i].frequency)) < 0.5f) {
+				good++;
+			}
+		}
+		CHECK_TRUE(good > static_cast<int>(results.size() - 5) * 9 / 10);
+	}
+}
+
 TEST(PitchTrackerTests, voiceLikeTonesDoNotJumpAnOctave) {
 	// strong second and third harmonics, weaker fundamental, as in many voices
 	std::vector<float> harmonics = {0.5f, 1.0f, 0.8f, 0.4f, 0.2f};
