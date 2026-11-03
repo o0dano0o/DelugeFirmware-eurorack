@@ -142,6 +142,8 @@ PitchResult unvoiced() {
 
 TEST(NoteFollowerTests, gateOpensAfterAttackFramesOnTheRightNote) {
 	NoteFollower f;
+	f.setAttackFrames(3);
+	f.setReleaseFrames(5);
 	CHECK_FALSE(f.update(voicedAt(60.1f)));
 	CHECK_FALSE(f.update(voicedAt(59.9f)));
 	CHECK_FALSE(f.gate());
@@ -152,6 +154,8 @@ TEST(NoteFollowerTests, gateOpensAfterAttackFramesOnTheRightNote) {
 
 TEST(NoteFollowerTests, vibratoDoesNotRetrigger) {
 	NoteFollower f;
+	f.setAttackFrames(3);
+	f.setReleaseFrames(5);
 	for (int i = 0; i < 3; i++) {
 		f.update(voicedAt(64.0f));
 	}
@@ -167,6 +171,8 @@ TEST(NoteFollowerTests, vibratoDoesNotRetrigger) {
 
 TEST(NoteFollowerTests, singleGlitchDoesNotChangeNote) {
 	NoteFollower f;
+	f.setAttackFrames(3);
+	f.setReleaseFrames(5);
 	for (int i = 0; i < 5; i++) {
 		f.update(voicedAt(60.0f));
 	}
@@ -179,6 +185,8 @@ TEST(NoteFollowerTests, singleGlitchDoesNotChangeNote) {
 
 TEST(NoteFollowerTests, realChangeIsFollowedAfterAttackFrames) {
 	NoteFollower f;
+	f.setAttackFrames(3);
+	f.setReleaseFrames(5);
 	for (int i = 0; i < 5; i++) {
 		f.update(voicedAt(60.0f));
 	}
@@ -191,6 +199,8 @@ TEST(NoteFollowerTests, realChangeIsFollowedAfterAttackFrames) {
 
 TEST(NoteFollowerTests, shortDropoutKeepsGateButLongOneCloses) {
 	NoteFollower f;
+	f.setAttackFrames(3);
+	f.setReleaseFrames(5);
 	for (int i = 0; i < 5; i++) {
 		f.update(voicedAt(60.0f));
 	}
@@ -211,6 +221,8 @@ TEST(NoteFollowerTests, shortDropoutKeepsGateButLongOneCloses) {
 TEST(NoteFollowerTests, endToEndWithRealAudio) {
 	PitchTracker t;
 	NoteFollower f;
+	f.setAttackFrames(3);
+	f.setReleaseFrames(5);
 	std::vector<float> audio = tone(220.0f, 0.5f, 0.3f);
 	auto b = tone(293.7f, 0.5f, 0.3f);
 	audio.insert(audio.end(), b.begin(), b.end());
@@ -229,5 +241,19 @@ TEST(NoteFollowerTests, endToEndWithRealAudio) {
 	CHECK_EQUAL(2, static_cast<int>(changes.size()));
 	CHECK_EQUAL(57, changes[0]); // A3
 	CHECK_EQUAL(62, changes[1]); // D4
+	CHECK_FALSE(f.gate());
+}
+
+TEST(NoteFollowerTests, defaultsOpenQuicklyAndCloseSlowly) {
+	NoteFollower f;
+	f.update(voicedAt(60.0f));
+	CHECK_FALSE(f.gate());
+	f.update(voicedAt(60.0f));
+	CHECK_TRUE(f.gate());
+	for (int i = 0; i < 7; i++) {
+		f.update(unvoiced());
+	}
+	CHECK_TRUE(f.gate());
+	f.update(unvoiced());
 	CHECK_FALSE(f.gate());
 }

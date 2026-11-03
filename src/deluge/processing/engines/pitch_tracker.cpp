@@ -22,8 +22,8 @@
 namespace deluge::voice {
 
 namespace {
-constexpr float kYinThreshold = 0.15f;  ///< first dip of the normalised difference below this is taken as the period
-constexpr float kVoicedLimit = 0.30f;   ///< above this, nothing periodic enough to call a pitch
+constexpr float kYinThreshold = 0.20f;  ///< first dip of the normalised difference below this is taken as the period
+constexpr float kVoicedLimit = 0.45f;   ///< above this, nothing periodic enough to call a pitch
 } // namespace
 
 void PitchTracker::reset() {

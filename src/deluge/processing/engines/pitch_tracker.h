@@ -103,8 +103,8 @@ public:
 	float pitch() const { return pitch_; }
 
 private:
-	int32_t attackFrames_ = 3;
-	int32_t releaseFrames_ = 5;
+	int32_t attackFrames_ = 2;
+	int32_t releaseFrames_ = 8;
 	bool gate_ = false;
 	int32_t note_ = 60;
 	float pitch_ = 60.0f;

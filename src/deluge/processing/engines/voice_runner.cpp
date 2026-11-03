@@ -158,7 +158,10 @@ void feedInput(const int32_t* interleavedStereo, int32_t numFrames) {
 	uint32_t w = writePos;
 	for (int32_t i = 0; i < numFrames; i++) {
 		// Q31 to -1..1
-		ring[w & (kRingSize - 1)] = static_cast<float>(interleavedStereo[i * 2]) * (1.0f / 2147483648.0f);
+		// both input channels are added, so it doesn't matter which one the mic or line input arrives on
+		ring[w & (kRingSize - 1)] = (static_cast<float>(interleavedStereo[i * 2] >> 1)
+		                             + static_cast<float>(interleavedStereo[i * 2 + 1] >> 1))
+		                            * (1.0f / 2147483648.0f);
 		w++;
 	}
 	writePos = w;
