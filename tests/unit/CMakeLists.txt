@@ -67,6 +67,7 @@ file(GLOB_RECURSE deluge_SOURCES
         ../../src/deluge/processing/engines/turing_engine.cpp
         # For pitch tracker tests
         ../../src/deluge/processing/engines/pitch_tracker.cpp
+        ../../src/deluge/processing/engines/phrase_loop.cpp
 )
 
 add_executable(UnitTests
@@ -85,6 +86,7 @@ add_executable(UnitTests
         chaos_engine_tests.cpp
         turing_engine_tests.cpp
         pitch_tracker_tests.cpp
+        phrase_loop_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)

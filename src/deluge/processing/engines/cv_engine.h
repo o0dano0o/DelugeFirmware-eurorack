@@ -122,6 +122,8 @@ public:
 	uint16_t getLastVoltageCode(uint8_t channel) const { return lastVoltageCode_[channel]; }
 	/// For displays: true while a gate is high, or for `holdMs` after it last went high (triggers are short)
 	bool gateRecentlyOn(uint8_t channel, int32_t holdMs) const;
+	/// Counts every time a gate goes high (not counting mutes), for things that follow another gate's triggers
+	uint32_t gateRiseCount(uint8_t channel) const { return channel < NUM_GATE_CHANNELS ? gateRises_[channel] : 0; }
 
 	inline bool isNoteOn(int32_t channel, int32_t note) {
 		return (gateChannels[channel].on && cvChannels[channel].noteCurrentlyPlaying == note);
@@ -142,6 +144,8 @@ private:
 	uint8_t mutedCV_ = 0;
 	uint32_t gateLastOnTime_[NUM_GATE_CHANNELS] = {};
 	bool gateEverOn_[NUM_GATE_CHANNELS] = {};
+	uint32_t gateRises_[NUM_GATE_CHANNELS] = {};
+	bool gateWasHigh_[NUM_GATE_CHANNELS] = {};
 	/// gate 1-4 as synths or drums
 	bool gateOutputPending{false};
 	/// gate 3 as a run signal

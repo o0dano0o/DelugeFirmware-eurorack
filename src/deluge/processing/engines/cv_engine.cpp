@@ -22,6 +22,7 @@
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/turing_runner.h"
+#include "processing/engines/voice_runner.h"
 #include "util/comparison.h"
 #include "util/functions.h"
 #include <math.h>
@@ -320,6 +321,10 @@ bool CVEngine::gateRecentlyOn(uint8_t channel, int32_t holdMs) const {
 
 void CVEngine::physicallySwitchGate(int32_t channel) {
 	bool high = gateChannels[channel].on && !(mutedGates_ & (1 << channel));
+	if (high && !gateWasHigh_[channel]) {
+		gateRises_[channel]++;
+	}
+	gateWasHigh_[channel] = high;
 	if (high) {
 		gateLastOnTime_[channel] = AudioEngine::audioSampleTimer;
 		gateEverOn_[channel] = true;
@@ -394,6 +399,7 @@ void CVEngine::analogOutTick() {
 void CVEngine::playbackBegun() {
 	deluge::chaos::runner::playbackBegun();
 	deluge::turing::runner::playbackBegun();
+	deluge::voice::runner::playbackBegun();
 	clockState = false;
 	updateRunOutput();
 }

@@ -1458,6 +1458,19 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeTag("quantise", voice.quantise ? 1 : 0);
 		writer.writeTag("octaveShift", voice.octaveShift);
 		writer.writeTag("sensitivity", voice.sensitivity);
+		writer.writeTag("loopTiming", static_cast<int32_t>(voice.loopTiming));
+		writer.writeTag("loopOneShot", voice.loopOneShot ? 1 : 0);
+		writer.writeTag("loopTrigger", voice.loopTrigger);
+		const auto& phrase = deluge::voice::runner::loopPhrase();
+		if (phrase.hasPhrase()) {
+			writer.writeTag("loopLength", static_cast<int32_t>(phrase.length()));
+			for (int32_t i = 0; i < phrase.numEvents(); i++) {
+				const auto& e = phrase.event(i);
+				// time in the upper 24 bits, gate in bit 7, note in the low 7 bits
+				uint32_t packed = (e.time << 8) | (e.gate ? 0x80u : 0u) | (e.note & 0x7Fu);
+				writer.writeTag("loopEvent", static_cast<int32_t>(packed));
+			}
+		}
 		writer.writeClosingTag("voiceTrack");
 	}
 
@@ -2089,6 +2102,9 @@ unknownTag:
 
 			else if (!strcmp(tagName, "voiceTrack")) {
 				deluge::voice::runner::Settings voice;
+				deluge::voice::PhraseEvent loopEvents[deluge::voice::PhraseLoop::kMaxEvents];
+				int32_t loopCount = 0;
+				uint32_t loopLength = 0;
 				reader.match('{');
 				while (*(tagName = reader.readNextTagOrAttributeName())) {
 					if (!strcmp(tagName, "channel")) {
@@ -2103,10 +2119,33 @@ unknownTag:
 					else if (!strcmp(tagName, "sensitivity")) {
 						voice.sensitivity = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
 					}
+					else if (!strcmp(tagName, "loopTiming")) {
+						voice.loopTiming = reader.readTagOrAttributeValueInt() == 1 ? deluge::voice::runner::LoopTiming::SONG
+						                                                              : deluge::voice::runner::LoopTiming::FREE;
+					}
+					else if (!strcmp(tagName, "loopOneShot")) {
+						voice.loopOneShot = reader.readTagOrAttributeValueInt() != 0;
+					}
+					else if (!strcmp(tagName, "loopTrigger")) {
+						voice.loopTrigger = static_cast<int8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "loopLength")) {
+						loopLength = static_cast<uint32_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "loopEvent")) {
+						uint32_t packed = static_cast<uint32_t>(reader.readTagOrAttributeValueInt());
+						if (loopCount < deluge::voice::PhraseLoop::kMaxEvents) {
+							loopEvents[loopCount].time = packed >> 8;
+							loopEvents[loopCount].gate = (packed & 0x80u) != 0;
+							loopEvents[loopCount].note = static_cast<uint8_t>(packed & 0x7Fu);
+							loopCount++;
+						}
+					}
 					reader.exitTag(tagName);
 				}
 				reader.exitTag("voiceTrack", true);
 				deluge::voice::runner::loadSettings(voice);
+				deluge::voice::runner::loadLoop(loopEvents, loopCount, loopLength);
 			}
 
 			else if (!strcmp(tagName, "sections")) {

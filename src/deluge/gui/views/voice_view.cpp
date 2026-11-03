@@ -28,9 +28,11 @@
 #include "hid/buttons.h"
 #include "hid/display/display.h"
 #include "hid/display/oled.h"
+#include "hid/led/indicator_leds.h"
 #include "hid/led/pad_leds.h"
 #include "model/clip/clip.h"
 #include "model/song/song.h"
+#include "playback/playback_handler.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/voice_runner.h"
 #include <algorithm>
@@ -58,6 +60,9 @@ const RGB kNoteLit{255, 255, 255};
 const RGB kGateColour{255, 60, 60};
 const RGB kOctaveColour{60, 140, 255};
 const RGB kHistoryColour{50, 190, 230};
+const RGB kLoopColour{255, 140, 30};
+const RGB kLoopHead{40, 40, 60};
+const RGB kRecordColour{255, 50, 50};
 constexpr int32_t kHistoryRows = kDisplayHeight - 2; ///< rows 0 to 5 hold the note history
 constexpr int32_t kHistoryLowNote = 40;              ///< E2, bottom of the history plot
 constexpr int32_t kSemitonesPerHistoryRow = 6;       ///< so the plot spans three octaves
@@ -95,6 +100,7 @@ void VoiceView::focusRegained() {
 	}
 	PadLEDs::clearTickSquares();
 	lastDrawnNote_ = -2;
+	indicator_leds::setLedState(IndicatorLED::RECORD, runner::loopState() == runner::LoopState::RECORDING);
 
 	if (display->haveOLED()) {
 		renderUIsForOled();
@@ -110,6 +116,15 @@ void VoiceView::graphicsRoutine() {
 	int32_t noteNow = runner::recentlyVoiced() ? runner::currentNote() : -1;
 	bool gate = runner::gateOn();
 	uint32_t historyNow = runner::historyVersion();
+	int32_t loopState = static_cast<int32_t>(runner::loopState());
+	int32_t loopColumn = loopState == static_cast<int32_t>(runner::LoopState::PLAYING)
+	                         ? static_cast<int32_t>(runner::loopPosition() * kDisplayWidth)
+	                         : -1;
+	if (loopState != lastDrawnLoopState_ || loopColumn != lastDrawnLoopColumn_) {
+		lastDrawnLoopState_ = loopState;
+		lastDrawnLoopColumn_ = loopColumn;
+		uiNeedsRendering(this);
+	}
 	if (levelNow != lastDrawnLevel_ || noteNow != lastDrawnNote_ || gate != lastDrawnGate_
 	    || historyNow != lastDrawnHistory_) {
 		lastDrawnHistory_ = historyNow;
@@ -137,10 +152,11 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 		}
 	}
 
+	bool recording = runner::loopState() == runner::LoopState::RECORDING;
 	if (whichRows & (1 << kLevelRow)) {
 		int32_t lit = levelPads(runner::currentLevel());
 		for (int32_t x = 0; x < lit; x++) {
-			image[kLevelRow][x] = (x >= kDisplayWidth - 3) ? kLevelPeak : kLevelColour;
+			image[kLevelRow][x] = recording ? kRecordColour : ((x >= kDisplayWidth - 3) ? kLevelPeak : kLevelColour);
 		}
 	}
 
@@ -162,6 +178,41 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 
 	// note history, oldest on the left, higher notes higher up; the slot in progress is white. The plot covers three
 	// octaves starting at the octave of the lowest note in view, so whistling shows up as well as singing.
+	auto loopState = runner::loopState();
+	if (loopState == runner::LoopState::PLAYING || loopState == runner::LoopState::READY) {
+		// the recorded phrase, the whole loop across the grid
+		int32_t notes[kDisplayWidth];
+		int32_t lowest = 1000;
+		for (int32_t col = 0; col < kDisplayWidth; col++) {
+			notes[col] = runner::loopNoteAt((static_cast<float>(col) + 0.5f) / kDisplayWidth);
+			if (notes[col] >= 0 && notes[col] < lowest) {
+				lowest = notes[col];
+			}
+		}
+		int32_t low = lowest < 1000 ? std::max<int32_t>(0, lowest / 12 * 12) : kHistoryLowNote;
+		int32_t head = (loopState == runner::LoopState::PLAYING)
+		                   ? static_cast<int32_t>(runner::loopPosition() * kDisplayWidth)
+		                   : -1;
+		for (int32_t col = 0; col < kDisplayWidth; col++) {
+			if (col == head) {
+				for (int32_t r = 0; r < kHistoryRows; r++) {
+					if (whichRows & (1 << r)) {
+						image[r][col] = kLoopHead;
+					}
+				}
+			}
+			if (notes[col] >= 0) {
+				int32_t row = std::max<int32_t>(0, std::min<int32_t>((notes[col] - low) / kSemitonesPerHistoryRow,
+				                                                    kHistoryRows - 1));
+				if (whichRows & (1 << row)) {
+					image[row][col] = (col == head) ? RGB{255, 255, 255} : kLoopColour;
+				}
+			}
+		}
+		PadLEDs::renderingLock = false;
+		return true;
+	}
+
 	int32_t historyLow = kHistoryLowNote;
 	{
 		int32_t lowest = 1000;
@@ -245,6 +296,33 @@ void VoiceView::renderOLED(deluge::hid::display::oled_canvas::Canvas& canvas) {
 		         static_cast<int>(s.sensitivity + 1));
 	}
 	canvas.drawStringCentred(text, yPos, kTextSpacingX, kTextSpacingY);
+#if OLED_MAIN_HEIGHT_PIXELS == 64
+	yPos += 12;
+	{
+		char const* state = "";
+		switch (runner::loopState()) {
+		case runner::LoopState::RECORDING:
+			state = "REC";
+			break;
+		case runner::LoopState::PLAYING:
+			state = "playing";
+			break;
+		case runner::LoopState::READY:
+			state = "ready";
+			break;
+		default:
+			state = "empty";
+			break;
+		}
+		char trig[8] = "off";
+		if (s.loopTrigger >= 0) {
+			snprintf(trig, sizeof(trig), "g%d", static_cast<int>(s.loopTrigger + 1));
+		}
+		snprintf(text, sizeof(text), "%s %s %s trig %s", s.loopTiming == runner::LoopTiming::SONG ? "song" : "free",
+		         s.loopOneShot ? "once" : "loop", state, trig);
+		canvas.drawStringCentred(text, yPos, kTextSpacingX, kTextSpacingY);
+	}
+#endif
 }
 
 void VoiceView::refreshOLED() {
@@ -292,6 +370,35 @@ ActionResult VoiceView::verticalEncoderAction(int32_t offset, bool inCardRoutine
 }
 
 void VoiceView::modEncoderAction(int32_t whichModEncoder, int32_t offset) {
+	if (whichModEncoder == 1) {
+		// which gate's triggers restart the phrase: off, then gates 1 to 4 (not the channel the voice itself uses)
+		int32_t own = runner::getSettings().channel;
+		int32_t trigger = runner::getSettings().loopTrigger;
+		int32_t step = offset > 0 ? 1 : -1;
+		for (int32_t tries = 0; tries < 6; tries++) {
+			trigger += step;
+			if (trigger > 3) {
+				trigger = -1;
+			}
+			if (trigger < -1) {
+				trigger = 3;
+			}
+			if (trigger != own) {
+				break;
+			}
+		}
+		runner::setLoopTrigger(trigger);
+		char text[24];
+		if (trigger < 0) {
+			snprintf(text, sizeof(text), display->haveOLED() ? "Retrigger: off" : "T-");
+		}
+		else {
+			snprintf(text, sizeof(text), display->haveOLED() ? "Retrigger: gate %d" : "T%d", static_cast<int>(trigger + 1));
+		}
+		showValuePopup(text);
+		refreshOLED();
+		return;
+	}
 	if (whichModEncoder == 0) {
 		runner::setOctaveShift(runner::getSettings().octaveShift + (offset > 0 ? 1 : -1));
 		char text[24];
@@ -300,6 +407,46 @@ void VoiceView::modEncoderAction(int32_t whichModEncoder, int32_t offset) {
 		showValuePopup(text);
 		refreshOLED();
 	}
+}
+
+ActionResult VoiceView::horizontalEncoderAction(int32_t offset) {
+	if (Buttons::isShiftButtonPressed()) {
+		auto timing = runner::getSettings().loopTiming == runner::LoopTiming::FREE ? runner::LoopTiming::SONG
+		                                                                            : runner::LoopTiming::FREE;
+		bool hadPhrase = runner::loopState() != runner::LoopState::NONE;
+		runner::setLoopTiming(timing);
+		char text[32];
+		bool song = timing == runner::LoopTiming::SONG;
+		snprintf(text, sizeof(text), display->haveOLED() ? (hadPhrase ? "%s timing, phrase cleared" : "%s timing") : "%s",
+		         song ? (display->haveOLED() ? "Song" : "SONG") : (display->haveOLED() ? "Free" : "FREE"));
+		showValuePopup(text);
+	}
+	else {
+		bool oneShot = !runner::getSettings().loopOneShot;
+		runner::setLoopOneShot(oneShot);
+		showValuePopup(oneShot ? (display->haveOLED() ? "One-shot" : "ONCE") : (display->haveOLED() ? "Loop" : "LOOP"));
+	}
+	refreshOLED();
+	return ActionResult::DEALT_WITH;
+}
+
+ActionResult VoiceView::padAction(int32_t x, int32_t y, int32_t velocity) {
+	// a pad in the plot plays the phrase from the top; SHIFT + pad stops it
+	if (velocity && x < kDisplayWidth && y < kHistoryRows) {
+		if (Buttons::isShiftButtonPressed()) {
+			runner::stopLoop();
+			showNamePopup(display->haveOLED() ? "Phrase stopped" : "STOP");
+		}
+		else if (runner::loopState() == runner::LoopState::NONE || runner::loopState() == runner::LoopState::RECORDING) {
+			showNamePopup(display->haveOLED() ? "No phrase: press RECORD" : "NO PHRASE");
+		}
+		else {
+			runner::triggerLoop();
+			showNamePopup(display->haveOLED() ? "Phrase" : "PLAY");
+		}
+		refreshOLED();
+	}
+	return ActionResult::DEALT_WITH;
 }
 
 void VoiceView::selectEncoderAction(int8_t offset) {
@@ -320,7 +467,39 @@ ActionResult VoiceView::buttonAction(deluge::hid::Button b, bool on, bool inCard
 				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
 			}
 			display->cancelPopup();
+			indicator_leds::setLedState(IndicatorLED::RECORD, playbackHandler.recording != RecordingMode::OFF);
 			changeRootUI(eurorackView.takeBackTarget(&euclideanView));
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
+	if (b == RECORD) {
+		if (on) {
+			if (Buttons::isShiftButtonPressed()) {
+				runner::clearLoop();
+				showNamePopup(display->haveOLED() ? "Phrase cleared" : "CLEAR");
+			}
+			else {
+				switch (runner::toggleRecord()) {
+				case runner::RecordResult::NOT_ACTIVE:
+					showNamePopup(display->haveOLED() ? "Press CV to start the voice" : "CV TO START");
+					break;
+				case runner::RecordResult::NEEDS_PLAYBACK:
+					showNamePopup(display->haveOLED() ? "Start playback first (song timing)" : "PLAY FIRST");
+					break;
+				case runner::RecordResult::STARTED:
+					showNamePopup(display->haveOLED() ? "Recording" : "REC");
+					break;
+				case runner::RecordResult::PLAYING:
+					showNamePopup(display->haveOLED() ? "Playing phrase" : "PLAY");
+					break;
+				case runner::RecordResult::NOTHING_SUNG:
+					showNamePopup(display->haveOLED() ? "Nothing recorded" : "EMPTY");
+					break;
+				}
+			}
+			indicator_leds::setLedState(IndicatorLED::RECORD, runner::loopState() == runner::LoopState::RECORDING);
+			refreshOLED();
 		}
 		return ActionResult::DEALT_WITH;
 	}

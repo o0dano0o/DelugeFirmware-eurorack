@@ -35,6 +35,13 @@
 ///   select press         snap to semitones / follow the pitch continuously
 ///   lower gold knob      octave shift, -2 to +2
 ///   CV button            channel: off, CV/gate 1, CV/gate 2
+///
+/// Phrase looper (record what you sing, then replay it on the same CV and gate):
+///   RECORD               start recording; press again to stop, and the phrase plays at once. SHIFT + RECORD clears it
+///   a pad in the plot    play the phrase from the top (when it is a one-shot it plays once). SHIFT + pad stops it
+///   horizontal encoder   loop / one-shot.   SHIFT + it: timing, free or snapped to the song clock (clears the phrase)
+///   upper gold knob      restart the phrase on triggers from gate 1 to 4 (or off)
+/// While a phrase plays the plot shows it, with the playhead as a lit column.
 ///   BACK                 return to the Euclidean view
 ///
 /// Entered with the MIDI button from the Euclidean view. It starts off: press the CV button to switch it on at CV/gate 1, 2 (and off again).
@@ -56,8 +63,8 @@ public:
 	ActionResult timerCallback() override;
 
 	ActionResult buttonAction(deluge::hid::Button b, bool on, bool inCardRoutine) override;
-	ActionResult padAction(int32_t x, int32_t y, int32_t velocity) override { return ActionResult::DEALT_WITH; }
-	ActionResult horizontalEncoderAction(int32_t offset) override { return ActionResult::DEALT_WITH; }
+	ActionResult padAction(int32_t x, int32_t y, int32_t velocity) override;
+	ActionResult horizontalEncoderAction(int32_t offset) override;
 	ActionResult verticalEncoderAction(int32_t offset, bool inCardRoutine) override;
 	void modEncoderAction(int32_t whichModEncoder, int32_t offset) override;
 	void selectEncoderAction(int8_t offset) override;
@@ -71,6 +78,8 @@ private:
 	int32_t lastDrawnLevel_ = -1;
 	uint32_t lastDrawnHistory_ = 0;
 	bool lastDrawnGate_ = false;
+	int32_t lastDrawnLoopColumn_ = -1;
+	int32_t lastDrawnLoopState_ = -1;
 };
 
 extern VoiceView voiceView;
