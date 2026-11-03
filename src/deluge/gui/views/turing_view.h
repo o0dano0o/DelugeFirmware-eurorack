@@ -34,6 +34,7 @@
 ///
 /// Controls:
 ///   upper black encoder  flip probability       lower black encoder  loop length (2 to 16)
+///   SHIFT + lower black encoder  padding: 0 to 16 rest steps after each pass through the loop
 ///   lower gold knob      clock division         upper gold knob      octaves of range
 ///   select encoder       clock: song / chaos lobe / chaos loop
 ///   select encoder press randomise the register     SHIFT + press   random source: RNG / chaos

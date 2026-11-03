@@ -41,6 +41,7 @@ constexpr int32_t kNumDivisions = 9;
 constexpr int32_t kHistoryLength = 16;
 constexpr int32_t kMinOctaves = 1;
 constexpr int32_t kMaxOctaves = 4;
+constexpr int32_t kMaxPadding = 16;
 
 /// Name of a clock division for displays ("1/8", "1 bar", ...)
 char const* divisionName(int32_t division);
@@ -52,6 +53,7 @@ struct Settings {
 	RandomSource random = RandomSource::RNG;
 	float flipProbability = 0.1f;
 	uint8_t length = 8;
+	uint8_t padding = 0; ///< silent clock steps after each pass through the loop (the register waits)
 	uint8_t octaves = 2;
 	uint16_t shiftRegister = 0;
 	bool hasRegister = false; ///< false until a register has been made or loaded
@@ -74,6 +76,10 @@ void setRandomSource(RandomSource source);
 RandomSource getRandomSource();
 void setFlipProbability(float probability);
 void setLength(int32_t length);
+/// Padding: after every pass through the loop, this many clock steps are rests. The register waits and no gate
+/// fires, so a 5 note loop with 3 padding steps fills a bar of 8 steps.
+void setPadding(int32_t padding);
+int32_t getPadding();
 void setOctaves(int32_t octaves);
 int32_t getOctaves();
 /// Fills the register with new random bits
@@ -83,6 +89,11 @@ TuringEngine& engine();
 
 /// The value (0 to 255) output `age` steps ago; age 0 is the latest. 0 if there isn't one that old.
 uint8_t getHistoryValue(int32_t age);
+
+/// True if the step `age` steps ago was a padding rest
+bool getHistoryRest(int32_t age);
+/// True if the step `age` steps ago was the first of a pass through the loop
+bool getHistoryLoopStart(int32_t age);
 
 /// Counts clock steps, for displays that want to react to each one
 uint32_t getStepCount();

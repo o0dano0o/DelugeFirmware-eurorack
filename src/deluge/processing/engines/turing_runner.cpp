@@ -51,6 +51,9 @@ bool gateHigh = false;
 uint32_t gateOffAt = 0;
 bool haveLastStep = false;
 uint8_t history[kHistoryLength] = {};
+bool historyRest[kHistoryLength] = {};
+bool historyStart[kHistoryLength] = {};
+uint32_t cycleStep = 0; ///< position in the loop plus padding
 uint32_t historyCount = 0;
 
 float nextRandomFromRng() {
@@ -110,11 +113,31 @@ void outputCurrentNote() {
 }
 
 void doStep() {
+	// padding: after the loop has played, the next few steps are rests
+	uint32_t cycle = static_cast<uint32_t>(settings.length) + settings.padding;
+	if (cycleStep >= cycle) {
+		cycleStep = 0;
+	}
+	bool rest = cycleStep >= settings.length;
+	bool loopStart = cycleStep == 0;
+	cycleStep = (cycleStep + 1) % cycle;
+	if (rest) {
+		stepCount++;
+		history[historyCount % kHistoryLength] = turingEngine.getValue();
+		historyRest[historyCount % kHistoryLength] = true;
+		historyStart[historyCount % kHistoryLength] = false;
+		historyCount++;
+		lastStepTimer = AudioEngine::audioSampleTimer;
+		return;
+	}
+
 	float rnd = (settings.random == RandomSource::CHAOS) ? nextRandomFromChaos() : nextRandomFromRng();
 	turingEngine.clock(rnd);
 	settings.shiftRegister = turingEngine.getRegister();
 	stepCount++;
 	history[historyCount % kHistoryLength] = turingEngine.getValue();
+	historyRest[historyCount % kHistoryLength] = false;
+	historyStart[historyCount % kHistoryLength] = loopStart;
 	historyCount++;
 
 	uint32_t now = AudioEngine::audioSampleTimer;
@@ -162,6 +185,7 @@ void loadSettings(const Settings& s) {
 	settings = s;
 	settings.channel = -1;
 	settings.length = static_cast<uint8_t>(std::max<int32_t>(kMinLength, std::min<int32_t>(s.length, kMaxLength)));
+	settings.padding = static_cast<uint8_t>(std::max<int32_t>(0, std::min<int32_t>(s.padding, kMaxPadding)));
 	settings.octaves = static_cast<uint8_t>(std::max<int32_t>(kMinOctaves, std::min<int32_t>(s.octaves, kMaxOctaves)));
 	settings.division = static_cast<uint8_t>(std::min<int32_t>(s.division, kNumDivisions - 1));
 	applyEngineSettings();
@@ -192,6 +216,7 @@ void setChannel(int32_t channel) {
 	if (wanted >= 0) {
 		applyEngineSettings();
 		lastSongStep = -1;
+		cycleStep = 0;
 		lastChaosRiseCount = deluge::chaos::runner::gateRiseCount(
 		    settings.clock == ClockSource::CHAOS_LOBE ? 1 : 2);
 		haveLastStep = false;
@@ -243,7 +268,35 @@ void setFlipProbability(float probability) {
 void setLength(int32_t length) {
 	turingEngine.setLength(length);
 	settings.length = static_cast<uint8_t>(turingEngine.getLength());
+	if (cycleStep >= static_cast<uint32_t>(settings.length) + settings.padding) {
+		cycleStep = 0;
+	}
 	settings.shiftRegister = turingEngine.getRegister();
+}
+
+void setPadding(int32_t padding) {
+	settings.padding = static_cast<uint8_t>(std::max<int32_t>(0, std::min<int32_t>(padding, kMaxPadding)));
+	if (cycleStep >= static_cast<uint32_t>(settings.length) + settings.padding) {
+		cycleStep = 0;
+	}
+}
+
+int32_t getPadding() {
+	return settings.padding;
+}
+
+bool getHistoryRest(int32_t age) {
+	if (age < 0 || age >= kHistoryLength || static_cast<uint32_t>(age) >= historyCount) {
+		return false;
+	}
+	return historyRest[(historyCount - 1 - age) % kHistoryLength];
+}
+
+bool getHistoryLoopStart(int32_t age) {
+	if (age < 0 || age >= kHistoryLength || static_cast<uint32_t>(age) >= historyCount) {
+		return false;
+	}
+	return historyStart[(historyCount - 1 - age) % kHistoryLength];
 }
 
 void setOctaves(int32_t octaves) {
@@ -279,6 +332,7 @@ bool stepRecently(int32_t holdMs) {
 
 void playbackBegun() {
 	lastSongStep = -1;
+	cycleStep = 0;
 }
 
 void tick() {

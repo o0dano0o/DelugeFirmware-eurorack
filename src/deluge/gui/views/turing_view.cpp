@@ -139,8 +139,7 @@ bool TuringView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + 
 			continue;
 		}
 		// the first step of each pass through the loop gets a marker and a faint column behind its dot
-		int32_t length = runner::engine().getLength();
-		if ((runner::getStepCount() - 1 - age) % length == 0) {
+		if (runner::getHistoryLoopStart(age)) {
 			if (whichRows & (1 << kMarkerRow)) {
 				image[kMarkerRow][col] = kLoopStartColour;
 			}
@@ -149,6 +148,9 @@ bool TuringView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + 
 					image[r][col] = kLoopStartTint;
 				}
 			}
+		}
+		if (runner::getHistoryRest(age)) {
+			continue; // padding rest: only the loop marker shows
 		}
 		int32_t value = runner::getHistoryValue(age);
 		int32_t row = std::min(kPlotRows - 1, value * kPlotRows / 256);
@@ -199,8 +201,15 @@ void TuringView::renderOLED(deluge::hid::display::oled_canvas::Canvas& canvas) {
 		snprintf(text, sizeof(text), "off");
 	}
 	else {
-		snprintf(text, sizeof(text), "CV/gate %d  %d steps  %d%%", static_cast<int>(channel + 1),
-		         static_cast<int>(runner::engine().getLength()),
+		char steps[12];
+		if (runner::getPadding() > 0) {
+			snprintf(steps, sizeof(steps), "%d+%d", static_cast<int>(runner::engine().getLength()),
+			         static_cast<int>(runner::getPadding()));
+		}
+		else {
+			snprintf(steps, sizeof(steps), "%d", static_cast<int>(runner::engine().getLength()));
+		}
+		snprintf(text, sizeof(text), "CV/gate %d  %s steps  %d%%", static_cast<int>(channel + 1), steps,
 		         static_cast<int>(runner::engine().getFlipProbability() * 100.0f + 0.5f));
 	}
 	canvas.drawStringCentred(text, yPos, kTextSpacingX, kTextSpacingY);
@@ -263,6 +272,16 @@ ActionResult TuringView::horizontalEncoderAction(int32_t offset) {
 ActionResult TuringView::verticalEncoderAction(int32_t offset, bool inCardRoutine) {
 	if (inCardRoutine) {
 		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+	}
+	if (Buttons::isShiftButtonPressed()) {
+		// SHIFT + this encoder: padding, rests after each pass through the loop (like padding in the Euclid view)
+		runner::setPadding(runner::getPadding() + (offset > 0 ? 1 : -1));
+		char text[24];
+		snprintf(text, sizeof(text), display->haveOLED() ? "Padding %d" : "P%d", static_cast<int>(runner::getPadding()));
+		showValuePopup(text);
+		refreshOLED();
+		uiNeedsRendering(this);
+		return ActionResult::DEALT_WITH;
 	}
 	runner::setLength(runner::engine().getLength() + offset);
 	char text[24];
