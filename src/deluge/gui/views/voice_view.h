@@ -28,8 +28,8 @@
 ///   top row        input level meter
 ///   second row     the 12 note names (C to B) with the note you are singing lit; columns 12 to 15 show the octave
 ///   pads below     the last four seconds of notes as a dot plot, newest on the right, higher notes higher up
-///                  (six semitones per row over three octaves from the octave of the lowest note shown; the slot in progress is
-///                  white)
+///                  (zoomed to the notes in view: the lowest on the bottom row, the highest on the top, never less
+///                  than an octave apart; the slot in progress is white)
 /// Controls:
 ///   select encoder       sensitivity (how quiet a voice is still picked up)
 ///   select press         snap to semitones / follow the pitch continuously

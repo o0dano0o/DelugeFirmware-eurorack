@@ -64,8 +64,15 @@ const RGB kLoopColour{255, 140, 30};
 const RGB kLoopHead{40, 40, 60};
 const RGB kRecordColour{255, 50, 50};
 constexpr int32_t kHistoryRows = kDisplayHeight - 2; ///< rows 0 to 5 hold the note history
-constexpr int32_t kHistoryLowNote = 40;              ///< E2, bottom of the history plot
-constexpr int32_t kSemitonesPerHistoryRow = 6;       ///< so the plot spans three octaves
+constexpr int32_t kMinPlotSpan = 12; ///< semitones: the plot never zooms in further than one octave over its six rows
+
+/// The plot zooms to the notes in view: the lowest is on the bottom row and the highest on the top, but never less than
+/// an octave apart, so a small wobble doesn't fill the whole height
+int32_t plotRow(int32_t note, int32_t low, int32_t high) {
+	int32_t span = std::max<int32_t>(kMinPlotSpan, high - low);
+	int32_t row = ((note - low) * (kHistoryRows - 1) * 2 + span) / (span * 2); // rounded
+	return std::max<int32_t>(0, std::min<int32_t>(row, kHistoryRows - 1));
+}
 
 char const* const kNoteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
@@ -176,20 +183,21 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 		}
 	}
 
-	// note history, oldest on the left, higher notes higher up; the slot in progress is white. The plot covers three
-	// octaves starting at the octave of the lowest note in view, so whistling shows up as well as singing.
+	// note history, oldest on the left, higher notes higher up; the slot in progress is white. The plot zooms to the
+	// notes in view (at least an octave tall), so a small melody still moves around and whistling shows up as well.
 	auto loopState = runner::loopState();
 	if (loopState == runner::LoopState::PLAYING || loopState == runner::LoopState::READY) {
 		// the recorded phrase, the whole loop across the grid
 		int32_t notes[kDisplayWidth];
 		int32_t lowest = 1000;
+		int32_t highest = -1;
 		for (int32_t col = 0; col < kDisplayWidth; col++) {
 			notes[col] = runner::loopNoteAt((static_cast<float>(col) + 0.5f) / kDisplayWidth);
-			if (notes[col] >= 0 && notes[col] < lowest) {
-				lowest = notes[col];
+			if (notes[col] >= 0) {
+				lowest = std::min(lowest, notes[col]);
+				highest = std::max(highest, notes[col]);
 			}
 		}
-		int32_t low = lowest < 1000 ? std::max<int32_t>(0, lowest / 12 * 12) : kHistoryLowNote;
 		int32_t head = (loopState == runner::LoopState::PLAYING)
 		                   ? static_cast<int32_t>(runner::loopPosition() * kDisplayWidth)
 		                   : -1;
@@ -202,8 +210,7 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 				}
 			}
 			if (notes[col] >= 0) {
-				int32_t row = std::max<int32_t>(0, std::min<int32_t>((notes[col] - low) / kSemitonesPerHistoryRow,
-				                                                    kHistoryRows - 1));
+				int32_t row = plotRow(notes[col], lowest, highest);
 				if (whichRows & (1 << row)) {
 					image[row][col] = (col == head) ? RGB{255, 255, 255} : kLoopColour;
 				}
@@ -213,17 +220,13 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 		return true;
 	}
 
-	int32_t historyLow = kHistoryLowNote;
-	{
-		int32_t lowest = 1000;
-		for (int32_t age = 0; age < runner::kHistoryLength; age++) {
-			int32_t n = runner::historyNote(age);
-			if (n >= 0 && n < lowest) {
-				lowest = n;
-			}
-		}
-		if (lowest < 1000) {
-			historyLow = std::max<int32_t>(0, lowest / 12 * 12);
+	int32_t historyLow = 1000;
+	int32_t historyHigh = -1;
+	for (int32_t age = 0; age < runner::kHistoryLength; age++) {
+		int32_t n = runner::historyNote(age);
+		if (n >= 0) {
+			historyLow = std::min(historyLow, n);
+			historyHigh = std::max(historyHigh, n);
 		}
 	}
 	for (int32_t col = 0; col < runner::kHistoryLength && col < kDisplayWidth; col++) {
@@ -232,8 +235,7 @@ bool VoiceView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth + k
 		if (note < 0) {
 			continue;
 		}
-		int32_t row = (note - historyLow) / kSemitonesPerHistoryRow;
-		row = std::max<int32_t>(0, std::min<int32_t>(row, kHistoryRows - 1));
+		int32_t row = plotRow(note, historyLow, historyHigh);
 		if (whichRows & (1 << row)) {
 			image[row][col] = (age == 0) ? RGB{255, 255, 255} : kHistoryColour;
 		}
