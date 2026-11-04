@@ -308,6 +308,14 @@ void TuringView::modEncoderAction(int32_t whichModEncoder, int32_t offset) {
 }
 
 void TuringView::selectEncoderAction(int8_t offset) {
+	if (Buttons::isShiftButtonPressed()) {
+		// SHIFT + select: what the CV does during padding rests, hold the last note or drop to 0 V
+		runner::setRestZero(!runner::getRestZero());
+		showNamePopup(runner::getRestZero() ? (display->haveOLED() ? "Rests: CV to 0 V" : "REST 0V")
+		                                    : (display->haveOLED() ? "Rests: hold last note" : "REST HOLD"));
+		refreshOLED();
+		return;
+	}
 	constexpr int32_t n = static_cast<int32_t>(runner::ClockSource::kNumSources);
 	int32_t next = (static_cast<int32_t>(runner::getClockSource()) + (offset > 0 ? 1 : n - 1)) % n;
 	runner::setClockSource(static_cast<runner::ClockSource>(next));

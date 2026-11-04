@@ -128,6 +128,9 @@ void doStep() {
 		historyStart[historyCount % kHistoryLength] = false;
 		historyCount++;
 		lastStepTimer = AudioEngine::audioSampleTimer;
+		if (settings.restZero && settings.channel >= 0) {
+			cvEngine.sendChaosVoltage(settings.channel, 0);
+		}
 		return;
 	}
 
@@ -272,6 +275,17 @@ void setLength(int32_t length) {
 		cycleStep = 0;
 	}
 	settings.shiftRegister = turingEngine.getRegister();
+}
+
+void setRestZero(bool zero) {
+	settings.restZero = zero;
+	if (!zero && settings.channel >= 0 && cycleStep > settings.length) {
+		outputCurrentNote(); // holding again: put the last note's voltage back
+	}
+}
+
+bool getRestZero() {
+	return settings.restZero;
 }
 
 void setPadding(int32_t padding) {

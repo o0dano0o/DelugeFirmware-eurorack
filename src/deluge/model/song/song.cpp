@@ -1445,6 +1445,7 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeTag("flip", static_cast<int32_t>(turing.flipProbability * 10000.0f + 0.5f));
 		writer.writeTag("length", turing.length);
 		writer.writeTag("padding", turing.padding);
+		writer.writeTag("restZero", turing.restZero ? 1 : 0);
 		writer.writeTag("octaves", turing.octaves);
 		writer.writeTag("register", turing.shiftRegister);
 		writer.writeClosingTag("turing");
@@ -2065,6 +2066,9 @@ unknownTag:
 					}
 					else if (!strcmp(tagName, "length")) {
 						turing.length = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "restZero")) {
+						turing.restZero = reader.readTagOrAttributeValueInt() != 0;
 					}
 					else if (!strcmp(tagName, "padding")) {
 						turing.padding = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());

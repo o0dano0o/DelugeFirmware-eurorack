@@ -53,6 +53,7 @@ struct Settings {
 	RandomSource random = RandomSource::RNG;
 	float flipProbability = 0.1f;
 	uint8_t length = 8;
+	bool restZero = false; ///< during padding rests the CV drops to 0 V instead of holding the last note
 	uint8_t padding = 0; ///< silent clock steps after each pass through the loop (the register waits)
 	uint8_t octaves = 2;
 	uint16_t shiftRegister = 0;
@@ -78,6 +79,8 @@ void setFlipProbability(float probability);
 void setLength(int32_t length);
 /// Padding: after every pass through the loop, this many clock steps are rests. The register waits and no gate
 /// fires, so a 5 note loop with 3 padding steps fills a bar of 8 steps.
+void setRestZero(bool zero);
+bool getRestZero();
 void setPadding(int32_t padding);
 int32_t getPadding();
 void setOctaves(int32_t octaves);

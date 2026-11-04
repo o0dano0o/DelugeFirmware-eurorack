@@ -34,6 +34,7 @@
 ///
 /// Controls:
 ///   upper black encoder  flip probability       lower black encoder  loop length (2 to 16)
+///   SHIFT + select encoder       what the CV does during padding rests: hold the last note, or drop to 0 V
 ///   SHIFT + lower black encoder  padding: 0 to 16 rest steps after each pass through the loop
 ///   lower gold knob      clock division         upper gold knob      octaves of range
 ///   select encoder       clock: song / chaos lobe / chaos loop
