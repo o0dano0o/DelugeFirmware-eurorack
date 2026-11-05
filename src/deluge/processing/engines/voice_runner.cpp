@@ -83,6 +83,7 @@ void updateHistory(bool gate, int32_t note) {
 PhraseLoop phrase;
 bool loopGateHigh = false;
 uint32_t lastTriggerRises = 0;
+int8_t lastChannel = 0; ///< the channel the voice tracker was last on, so a phrase can switch it back on
 bool recordedGate = false;
 int32_t recordedNote = -1;
 
@@ -218,6 +219,7 @@ void setChannel(int32_t channel) {
 	releaseChannel(settings.channel);
 	settings.channel = wanted;
 	if (wanted >= 0) {
+		lastChannel = wanted;
 		// the Turing machine can't share the channel
 		if (deluge::turing::runner::getChannel() == wanted) {
 			deluge::turing::runner::setChannel(-1);
@@ -399,8 +401,15 @@ RecordResult toggleRecord() {
 }
 
 void triggerLoop() {
-	if (settings.channel < 0 || !phrase.hasPhrase() || phrase.isRecording()) {
+	if (!phrase.hasPhrase() || phrase.isRecording()) {
 		return;
+	}
+	if (settings.channel < 0) {
+		// the voice tracker was switched off (leaving a phrase behind): switch it back on where it was
+		setChannel(lastChannel);
+		if (settings.channel < 0) {
+			return;
+		}
 	}
 	beginPhrasePlayback();
 }

@@ -443,8 +443,9 @@ ActionResult VoiceView::padAction(int32_t x, int32_t y, int32_t velocity) {
 			showNamePopup(display->haveOLED() ? "No phrase: press RECORD" : "NO PHRASE");
 		}
 		else {
+			bool wasOff = !runner::isActive();
 			runner::triggerLoop();
-			showNamePopup(display->haveOLED() ? "Phrase" : "PLAY");
+			showNamePopup(wasOff ? (display->haveOLED() ? "Voice on, phrase" : "VOICE ON") : (display->haveOLED() ? "Phrase" : "PLAY"));
 		}
 		refreshOLED();
 	}
