@@ -104,7 +104,9 @@ void PitchTracker::analyse() {
 	PitchResult result;
 	result.level = level;
 
-	if (level < levelThreshold_) {
+	// hysteresis: a note that is already sounding may fade to 40% of the opening level before it counts as over
+	float threshold = latest_.voiced ? levelThreshold_ * 0.4f : levelThreshold_;
+	if (level < threshold) {
 		latest_ = result;
 		return;
 	}
@@ -184,6 +186,12 @@ void PitchTracker::analyse() {
 				result = high;
 			}
 		}
+		// up here only a clean tone is believable; consonants and breath give weak, wandering matches
+		if (result.frequency > 700.0f && result.confidence < 0.9f) {
+			result.voiced = false;
+			result.frequency = 0.0f;
+			result.confidence = 0.0f;
+		}
 	}
 	latest_ = result;
 }
@@ -235,8 +243,13 @@ bool PitchTracker::analyseHigh(PitchResult& result) {
 	if (frequency < 700.0f) {
 		return false;
 	}
+	float confidence = 1.0f - highNormalised_[best];
+	// breath and hiss can look vaguely periodic up here; a real whistle is very clean
+	if (confidence < 0.93f) {
+		return false;
+	}
 	result.frequency = frequency;
-	result.confidence = 1.0f - highNormalised_[best];
+	result.confidence = confidence;
 	result.voiced = true;
 	return true;
 }
