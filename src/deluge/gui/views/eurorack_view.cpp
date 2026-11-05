@@ -54,7 +54,6 @@ enum Owner : uint8_t { EUCLID, CHAOS, TURING, VOICE, SYSTEM, kNumOwners = SYSTEM
 constexpr int32_t kNumGates = 4;
 constexpr int32_t kNumCVs = 2;
 constexpr int32_t kNumOutputs = kNumGates + kNumCVs;
-constexpr int32_t kTopRow = kDisplayHeight - 1;
 constexpr int32_t kMeterStart = 5;
 constexpr int32_t kMeterWidth = kDisplayWidth - kMeterStart;
 constexpr int32_t kHoldMs = 120;
@@ -65,13 +64,11 @@ const RGB kSystemColour{60, 60, 60};
 char const* const kOwnerNames[kNumOwners] = {"Euclid", "Chaos", "Turing", "Voice"};
 
 /// Output index 0-3 are gates 1-4, 4-5 are CV 1-2
-int32_t rowForOutput(int32_t output) {
-	return kTopRow - output;
-}
+/// Rows from the top: gate 1, CV 1, gap, gate 2, CV 2, gap, gate 3, gate 4 (-1 is a gap)
+constexpr int32_t kOutputAtRow[kDisplayHeight] = {3, 2, -1, 5, 1, -1, 4, 0}; // indexed by y, y = 0 is the bottom
 
 int32_t outputForRow(int32_t y) {
-	int32_t output = kTopRow - y;
-	return (output >= 0 && output < kNumOutputs) ? output : -1;
+	return (y >= 0 && y < kDisplayHeight) ? kOutputAtRow[y] : -1;
 }
 
 bool isGate(int32_t output) {
