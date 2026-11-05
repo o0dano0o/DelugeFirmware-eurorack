@@ -290,6 +290,8 @@ void CVEngine::sendVoltageOut(uint8_t channel, uint16_t voltage) {
 	if (channel < NUM_PHYSICAL_CV_CHANNELS) {
 		wantedVoltageCode_[channel] = voltage;
 		if (mutedCV_ & (1 << channel)) {
+			// nothing will be written, so nothing is pending: gates waiting for "the CV write to finish" must go ahead
+			cvOutPending = false;
 			return;
 		}
 		lastVoltageCode_[channel] = voltage;
