@@ -1476,10 +1476,11 @@ weAreInArrangementEditorOrInClipInstance:
 	}
 
 	// output mutes from the Eurorack overview
-	if (cvEngine.getMutedGates() || cvEngine.getMutedCV()) {
+	if (cvEngine.getMutedGates() || cvEngine.getMutedCV() || cvEngine.getQuantisedCV()) {
 		writer.writeOpeningTag("outputMute");
 		writer.writeTag("gates", cvEngine.getMutedGates());
 		writer.writeTag("cv", cvEngine.getMutedCV());
+		writer.writeTag("quantise", cvEngine.getQuantisedCV());
 		writer.writeClosingTag("outputMute");
 	}
 
@@ -1511,6 +1512,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::voice::runner::resetToDefaults();
 	cvEngine.setMutedGates(0);
 	cvEngine.setMutedCV(0);
+	cvEngine.setQuantisedCV(0);
 
 	// reverb mode is freeverb for songs that predate having multiple options. New songs will set it to mutable anyway
 	// so this is only used as a fallback
@@ -2089,6 +2091,7 @@ unknownTag:
 			else if (!strcmp(tagName, "outputMute")) {
 				uint8_t gates = 0;
 				uint8_t cv = 0;
+				uint8_t quantise = 0;
 				reader.match('{');
 				while (*(tagName = reader.readNextTagOrAttributeName())) {
 					if (!strcmp(tagName, "gates")) {
@@ -2097,11 +2100,15 @@ unknownTag:
 					else if (!strcmp(tagName, "cv")) {
 						cv = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
 					}
+					else if (!strcmp(tagName, "quantise")) {
+						quantise = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
 					reader.exitTag(tagName);
 				}
 				reader.exitTag("outputMute", true);
 				cvEngine.setMutedGates(gates);
 				cvEngine.setMutedCV(cv);
+				cvEngine.setQuantisedCV(quantise);
 			}
 
 			else if (!strcmp(tagName, "voiceTrack")) {

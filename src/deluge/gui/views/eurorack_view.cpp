@@ -146,6 +146,7 @@ void EurorackView::graphicsRoutine() {
 	for (int32_t output = 0; output < kNumOutputs; output++) {
 		signature = signature * 31 + ownerOf(output);
 		signature = signature * 2 + (isMuted(output) ? 1 : 0);
+		signature = signature * 2 + ((!isGate(output) && (cvEngine.getQuantisedCV() & (1 << channelOf(output)))) ? 1 : 0);
 		int32_t channel = channelOf(output);
 		if (isGate(output)) {
 			bool on = cvEngine.gateChannels[channel].on;
@@ -205,6 +206,9 @@ bool EurorackView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth 
 				}
 			}
 			else {
+				// the quantiser switch sits in the gap column
+				bool quantised = cvEngine.getQuantisedCV() & (1 << channel);
+				image[y][kNumOwners] = quantised ? RGB{255, 170, 0} : RGB{255, 170, 0}.transform([](uint8_t v) { return v / 14; });
 				int32_t lit = (cvEngine.getLastVoltageCode(channel) * kMeterWidth + 32760) / 65520;
 				lit = std::max<int32_t>(0, std::min<int32_t>(lit, kMeterWidth));
 				for (int32_t x = 0; x < kMeterWidth; x++) {
@@ -289,6 +293,20 @@ ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 			char text[40];
 			snprintf(text, sizeof(text), "%s%d %s", isGate(output) ? "Gate " : "CV ", static_cast<int>(channel + 1),
 			         muted ? "muted" : "on");
+			showNotice(text);
+			uiNeedsRendering(this);
+		}
+		return ActionResult::DEALT_WITH;
+	}
+	// The gap column of a CV row switches its quantiser
+	if (x == kNumOwners) {
+		int32_t output = outputForRow(y);
+		if (output >= kNumGates) {
+			int32_t channel = channelOf(output);
+			uint8_t q = cvEngine.getQuantisedCV() ^ (1 << channel);
+			cvEngine.setQuantisedCV(q);
+			char text[40];
+			snprintf(text, sizeof(text), "CV %d quant %s", static_cast<int>(channel + 1), (q >> channel) & 1 ? "on" : "off");
 			showNotice(text);
 			uiNeedsRendering(this);
 		}

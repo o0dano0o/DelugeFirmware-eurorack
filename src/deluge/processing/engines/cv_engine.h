@@ -118,6 +118,11 @@ public:
 	uint8_t getMutedGates() const { return mutedGates_; }
 	uint8_t getMutedCV() const { return mutedCV_; }
 
+	/// CV quantiser (set from the Eurorack overview): snaps the voltage of the chaos, Turing and voice outputs on a CV
+	/// channel to the notes of the song's scale
+	void setQuantisedCV(uint8_t mask);
+	uint8_t getQuantisedCV() const { return quantisedCV_; }
+
 	/// For displays: the last DAC code written to a CV channel (0 to 65535, 6552 per volt)
 	uint16_t getLastVoltageCode(uint8_t channel) const { return lastVoltageCode_[channel]; }
 	/// For displays: true while a gate is high, or for `holdMs` after it last went high (triggers are short)
@@ -142,6 +147,8 @@ private:
 	uint16_t wantedVoltageCode_[NUM_PHYSICAL_CV_CHANNELS] = {0, 0};
 	uint8_t mutedGates_ = 0;
 	uint8_t mutedCV_ = 0;
+	uint8_t quantisedCV_ = 0;
+	uint16_t quantiseCode(uint8_t channel, uint16_t code) const;
 	uint32_t gateLastOnTime_[NUM_GATE_CHANNELS] = {};
 	bool gateEverOn_[NUM_GATE_CHANNELS] = {};
 	uint32_t gateRises_[NUM_GATE_CHANNELS] = {};

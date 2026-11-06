@@ -20,7 +20,9 @@
 #include "hid/display/display.h"
 #include "io/debug/log.h"
 #include "processing/engines/audio_engine.h"
+#include "model/song/song.h"
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/quantiser.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
 #include "util/comparison.h"
@@ -261,7 +263,29 @@ void CVEngine::sendChaosVoltage(uint8_t channel, uint16_t code) {
 		return;
 	}
 	lastChaosCode_[channel] = code;
-	sendVoltageOut(channel, code);
+	sendVoltageOut(channel, quantiseCode(channel, code));
+}
+
+uint16_t CVEngine::quantiseCode(uint8_t channel, uint16_t code) const {
+	if (!(quantisedCV_ & (1 << channel)) || currentSong == nullptr || cvChannels[channel].voltsPerOctave == 0) {
+		return code;
+	}
+	const MusicalKey& key = currentSong->key;
+	int32_t root = ((key.rootNote % 12) + 12) % 12;
+	float perSemitone = 5.46f * cvChannels[channel].voltsPerOctave;
+	int32_t snapped = deluge::quantiser::snapCode(code, perSemitone, root, key.modeNotes.toBits());
+	return static_cast<uint16_t>(std::max<int32_t>(0, std::min<int32_t>(snapped, 65535)));
+}
+
+void CVEngine::setQuantisedCV(uint8_t mask) {
+	mask &= (1 << NUM_PHYSICAL_CV_CHANNELS) - 1;
+	uint8_t changed = quantisedCV_ ^ mask;
+	quantisedCV_ = mask;
+	for (uint8_t ch = 0; ch < NUM_PHYSICAL_CV_CHANNELS; ch++) {
+		if ((changed & (1 << ch)) && (chaosOwnedCV_ & (1 << ch)) && lastChaosCode_[ch] >= 0) {
+			sendVoltageOut(ch, quantiseCode(ch, static_cast<uint16_t>(lastChaosCode_[ch])));
+		}
+	}
 }
 
 void CVEngine::setMutedGates(uint8_t mask) {

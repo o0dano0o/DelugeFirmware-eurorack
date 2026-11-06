@@ -86,6 +86,7 @@ add_executable(UnitTests
         chaos_engine_tests.cpp
         turing_engine_tests.cpp
         pitch_tracker_tests.cpp
+        quantiser_tests.cpp
         phrase_loop_tests.cpp
 )
 add_test(NAME UnitTests
