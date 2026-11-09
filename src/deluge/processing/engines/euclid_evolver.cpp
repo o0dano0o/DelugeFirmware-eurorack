@@ -60,7 +60,7 @@ InstrumentClip* findClip() {
 	if (currentSong == nullptr) {
 		return nullptr;
 	}
-	Clip* clip = currentSong->currentClip;
+	Clip* clip = currentSong->getCurrentClip();
 	if (clip == nullptr || clip->type != ClipType::INSTRUMENT || clip->output == nullptr
 	    || clip->output->type != OutputType::KIT) {
 		return nullptr;
@@ -126,7 +126,7 @@ void respace(int32_t track, int32_t hits, int32_t rotation) {
 	if (!lookUp(track, ref, stack, memory)) {
 		return;
 	}
-	hits = std::clamp(hits, 0, ref.span);
+	hits = std::clamp<int32_t>(hits, 0, ref.span);
 	rotation = ((rotation % ref.span) + ref.span) % ref.span;
 
 	NoteVector newNotes;
@@ -223,7 +223,7 @@ void apply(int32_t track) {
 } // namespace
 
 const EvolveRule& rule(int32_t track) {
-	return rules_[std::clamp(track, 0, kNumTracks - 1)];
+	return rules_[std::clamp<int32_t>(track, 0, kNumTracks - 1)];
 }
 
 void setRule(int32_t track, const EvolveRule& rule) {

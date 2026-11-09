@@ -42,10 +42,10 @@ struct EvolveRule {
 	static EvolveRule unpack(int32_t v) {
 		EvolveRule r;
 		r.source = static_cast<int8_t>((v & 7) - 1);
-		r.every = static_cast<uint8_t>(std::clamp((v >> 3) & 31, 1, 16));
+		r.every = static_cast<uint8_t>(std::clamp<int32_t>((v >> 3) & 31, 1, 16));
 		r.target = ((v >> 8) & 1) ? ROTATE : HITS;
 		r.direction = static_cast<Direction>((v >> 9) & 3);
-		r.amount = static_cast<uint8_t>(std::clamp((v >> 11) & 7, 1, 4));
+		r.amount = static_cast<uint8_t>(std::clamp<int32_t>((v >> 11) & 7, 1, 4));
 		if (r.source > 3) {
 			r.source = -1;
 		}
