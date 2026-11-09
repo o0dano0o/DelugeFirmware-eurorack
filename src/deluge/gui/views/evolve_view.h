@@ -63,7 +63,9 @@ public:
 
 private:
 	void showValuePopup(char const* text);
-	void showRule(int32_t track);
+	enum class Change { SOURCE, TARGET, DIRECTION, EVERY, AMOUNT };
+	/// Tells the player what a tap just did (a full description on OLED, only the change on the 7-segment display)
+	void showRule(int32_t track, Change what);
 	void changeAmount(int32_t track, int32_t offset);
 	void refreshOLED();
 

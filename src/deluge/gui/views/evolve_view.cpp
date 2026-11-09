@@ -228,21 +228,54 @@ void EvolveView::renderOLED(deluge::hid::display::oled_canvas::Canvas& canvas) {
 	}
 }
 
-void EvolveView::showRule(int32_t track) {
+void EvolveView::showRule(int32_t track, Change what) {
 	const EvolveRule& r = evolver::rule(track);
-	char text[40];
-	if (!r.active()) {
-		snprintf(text, sizeof(text), display->haveOLED() ? "Gate %d: off" : "G%d OFF", static_cast<int>(track + 1));
+	char text[64];
+	if (display->haveOLED()) {
+		if (!r.active()) {
+			snprintf(text, sizeof(text), "Gate %d: off", static_cast<int>(track + 1));
+		}
+		else {
+			snprintf(text, sizeof(text), "G%d: every %d hits of G%d, %s %s %d", static_cast<int>(track + 1),
+			         static_cast<int>(r.every), static_cast<int>(r.source + 1), kTargetNames[r.target],
+			         kDirectionNames[r.direction], static_cast<int>(r.amount));
+		}
+		display->popupTextTemporary(text);
+		return;
 	}
-	else if (display->haveOLED()) {
-		snprintf(text, sizeof(text), "G%d: every %d hits of G%d, %s %s %d", static_cast<int>(track + 1),
-		         static_cast<int>(r.every), static_cast<int>(r.source + 1), kTargetNames[r.target],
-		         kDirectionNames[r.direction], static_cast<int>(r.amount));
+
+	// seven-segment display: say only what was just changed, in as few characters as possible
+	switch (what) {
+	case Change::SOURCE:
+		if (r.source == track) {
+			snprintf(text, sizeof(text), "GATE %d DRIFTS ON ITS OWN HITS", static_cast<int>(track + 1));
+		}
+		else if (r.active()) {
+			snprintf(text, sizeof(text), "GATE %d FOLLOWS GATE %d", static_cast<int>(track + 1),
+			         static_cast<int>(r.source + 1));
+		}
+		else {
+			snprintf(text, sizeof(text), "GATE %d OFF", static_cast<int>(track + 1));
+		}
+		display->setScrollingText(text);
+		return;
+	case Change::TARGET:
+		showValuePopup(r.target == EvolveRule::HITS ? "HITS" : "ROT");
+		return;
+	case Change::DIRECTION: {
+		static char const* const shortNames[] = {"UP", "DOWN", "BNCE", "RAND"};
+		showValuePopup(shortNames[r.direction]);
+		return;
 	}
-	else {
-		snprintf(text, sizeof(text), "%d%c%d", static_cast<int>(r.every), 'H', static_cast<int>(r.amount));
+	case Change::EVERY:
+		snprintf(text, sizeof(text), "E %d", static_cast<int>(r.every));
+		showValuePopup(text);
+		return;
+	case Change::AMOUNT:
+		snprintf(text, sizeof(text), "A %d", static_cast<int>(r.amount));
+		showValuePopup(text);
+		return;
 	}
-	showValuePopup(text);
 }
 
 void EvolveView::changeAmount(int32_t track, int32_t offset) {
@@ -252,7 +285,7 @@ void EvolveView::changeAmount(int32_t track, int32_t offset) {
 	}
 	r.amount = static_cast<uint8_t>(std::clamp<int32_t>(r.amount + (offset > 0 ? 1 : -1), 1, 4));
 	evolver::setRule(track, r);
-	showRule(track);
+	showRule(track, Change::AMOUNT);
 	refreshOLED();
 }
 
@@ -263,6 +296,7 @@ ActionResult EvolveView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	for (int32_t t = 0; t < kNumTracks; t++) {
 		EvolveRule r = evolver::rule(t);
 		if (y == upperRow(t)) {
+			Change what = Change::SOURCE;
 			if (x == kOffX) {
 				r.source = -1;
 			}
@@ -274,16 +308,24 @@ ActionResult EvolveView::padAction(int32_t x, int32_t y, int32_t velocity) {
 			}
 			else if (x == kHitsX) {
 				r.target = EvolveRule::HITS;
+				what = Change::TARGET;
 			}
 			else if (x == kRotateX) {
 				r.target = EvolveRule::ROTATE;
+				what = Change::TARGET;
 			}
 			else if (x >= kDirectionX && x < kDirectionX + 4) {
 				r.direction = static_cast<EvolveRule::Direction>(x - kDirectionX);
+				what = Change::DIRECTION;
 			}
 			else if (x == kRestoreX) {
 				evolver::restoreBaseline(t);
-				showValuePopup(display->haveOLED() ? "Pattern restored" : "RESTORED");
+				if (display->haveOLED()) {
+					display->popupTextTemporary("Pattern restored");
+				}
+				else {
+					display->setScrollingText("PATTERN RESTORED");
+				}
 				refreshOLED();
 				return ActionResult::DEALT_WITH;
 			}
@@ -291,14 +333,14 @@ ActionResult EvolveView::padAction(int32_t x, int32_t y, int32_t velocity) {
 				return ActionResult::DEALT_WITH;
 			}
 			evolver::setRule(t, r);
-			showRule(t);
+			showRule(t, what);
 			refreshOLED();
 			return ActionResult::DEALT_WITH;
 		}
 		if (y == lowerRow(t) && r.active()) {
 			r.every = static_cast<uint8_t>(x + 1);
 			evolver::setRule(t, r);
-			showRule(t);
+			showRule(t, Change::EVERY);
 			refreshOLED();
 			return ActionResult::DEALT_WITH;
 		}
