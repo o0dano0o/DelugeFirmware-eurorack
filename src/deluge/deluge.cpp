@@ -61,6 +61,7 @@
 #include "playback/mode/session.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
 #include "processing/engines/cv_engine.h"
@@ -589,6 +590,8 @@ void registerTasks() {
 	addRepeatingTask([]() { deluge::chaos::runner::tick(); }, p++, 0.001, 0.004, 0.02, "chaos", RESOURCE_NONE);
 	// steps the Turing machine from the song clock or a chaos gate
 	addRepeatingTask([]() { deluge::turing::runner::tick(); }, p++, 0.001, 0.002, 0.005, "turing", RESOURCE_NONE);
+	// Euclidean tracks changing each other over time
+	addRepeatingTask([]() { deluge::euclid::evolver::tick(); }, p++, 0.002, 0.005, 0.01, "evolve", RESOURCE_NONE);
 	// live voice-to-CV pitch tracking (does nothing while off)
 	addRepeatingTask([]() { deluge::voice::runner::tick(); }, p++, 0.002, 0.005, 0.01, "voice", RESOURCE_NONE);
 

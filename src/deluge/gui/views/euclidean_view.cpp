@@ -24,6 +24,7 @@
 #include "gui/views/chaos_view.h"
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/eurorack_view.h"
+#include "gui/views/evolve_view.h"
 #include "gui/views/turing_view.h"
 #include "gui/views/voice_view.h"
 #include "gui/ui_timer_manager.h"
@@ -46,6 +47,7 @@
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
 #include "storage/storage_manager.h"
@@ -721,6 +723,18 @@ ActionResult EuclideanView::buttonAction(deluge::hid::Button b, bool on, bool in
 		return ActionResult::DEALT_WITH;
 	}
 
+	// SHIFT + KEYBOARD opens the view where the tracks change each other over time
+	if (b == KEYBOARD && Buttons::isShiftButtonPressed()) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+			display->cancelPopup();
+			changeRootUI(&evolveView);
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
 	// KEYBOARD opens the Turing machine pitch generator
 	if (b == KEYBOARD) {
 		if (on) {
@@ -1322,6 +1336,12 @@ void EuclideanView::graphicsRoutine() {
 			lastDrawnPlayheadStep_[channel] = step;
 			rowsToRedraw |= rowsForChannel(channel);
 		}
+	}
+
+	// hits or rotation changed by the Evolve view's rules
+	if (deluge::euclid::evolver::changeCount() != lastEvolveCount_) {
+		lastEvolveCount_ = deluge::euclid::evolver::changeCount();
+		rowsToRedraw = 0xFF;
 	}
 
 	if (rowsToRedraw) {

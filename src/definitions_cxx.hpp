@@ -212,6 +212,7 @@ enum class UIType : uint8_t {
 	EUCLIDEAN,
 	CHAOS,
 	TURING,
+	EVOLVE,
 	VOICE,
 	EURORACK,
 	// Keep these at the bottom!

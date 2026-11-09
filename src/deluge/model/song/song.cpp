@@ -66,6 +66,7 @@
 #include <cstring>
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
 #include <new>
@@ -1475,6 +1476,24 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("voiceTrack");
 	}
 
+	// Euclidean tracks influencing each other
+	{
+		bool any = false;
+		for (int32_t t = 0; t < deluge::euclid::evolver::kNumTracks; t++) {
+			any = any || deluge::euclid::evolver::rule(t).active();
+		}
+		if (any) {
+			writer.writeOpeningTag("euclidEvolve");
+			writer.writeTag("frozen", deluge::euclid::evolver::isFrozen() ? 1 : 0);
+			for (int32_t t = 0; t < deluge::euclid::evolver::kNumTracks; t++) {
+				char name[8];
+				snprintf(name, sizeof(name), "rule%d", static_cast<int>(t));
+				writer.writeTag(name, deluge::euclid::evolver::rule(t).pack());
+			}
+			writer.writeClosingTag("euclidEvolve");
+		}
+	}
+
 	// output mutes from the Eurorack overview
 	if (cvEngine.getMutedGates() || cvEngine.getMutedCV() || cvEngine.getQuantisedCV()) {
 		writer.writeOpeningTag("outputMute");
@@ -1509,6 +1528,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	// A song without a chaos section leaves chaos off
 	deluge::chaos::runner::resetToDefaults();
 	deluge::turing::runner::resetToDefaults();
+	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
 	cvEngine.setMutedGates(0);
 	cvEngine.setMutedCV(0);
@@ -2086,6 +2106,22 @@ unknownTag:
 				}
 				reader.exitTag("turing", true);
 				deluge::turing::runner::loadSettings(turing);
+			}
+
+			else if (!strcmp(tagName, "euclidEvolve")) {
+				deluge::euclid::evolver::reset();
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "frozen")) {
+						deluge::euclid::evolver::setFrozen(reader.readTagOrAttributeValueInt() != 0);
+					}
+					else if (!strncmp(tagName, "rule", 4) && tagName[4] >= '0' && tagName[4] <= '3' && !tagName[5]) {
+						deluge::euclid::evolver::setRule(tagName[4] - '0',
+						                                 deluge::euclid::EvolveRule::unpack(reader.readTagOrAttributeValueInt()));
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("euclidEvolve", true);
 			}
 
 			else if (!strcmp(tagName, "outputMute")) {

@@ -485,6 +485,7 @@ EnumStringMap<UIType, util::to_underlying(UIType::UI_TYPE_COUNT)> uiTypeMap = {
       {UIType::EUCLIDEAN, "euclidean"},
       {UIType::CHAOS, "chaos"},
       {UIType::TURING, "turing"},
+      {UIType::EVOLVE, "evolve"},
       {UIType::VOICE, "voice"},
       {UIType::EURORACK, "eurorack"}}}};
 
