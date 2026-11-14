@@ -33,6 +33,7 @@
 #include "hid/buttons.h"
 #include "hid/display/display.h"
 #include "hid/display/oled.h"
+#include "hid/led/indicator_leds.h"
 #include "hid/led/pad_leds.h"
 #include "memory/general_memory_allocator.h"
 #include "model/action/action.h"
@@ -170,6 +171,11 @@ void EuclideanView::ensureGateRows(InstrumentClip* clip) {
 
 void EuclideanView::focusRegained() {
 	ClipView::focusRegained();
+
+	// The save and load browsers blink these; whoever they return to has to switch them off
+	indicator_leds::setLedState(IndicatorLED::SAVE, false);
+	indicator_leds::setLedState(IndicatorLED::LOAD, false);
+	indicator_leds::setLedState(IndicatorLED::BACK, false);
 
 	Clip* clip = getCurrentClip();
 	if (clip) {

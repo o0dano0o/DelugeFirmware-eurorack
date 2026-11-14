@@ -100,6 +100,11 @@ bool VoiceView::opened() {
 void VoiceView::focusRegained() {
 	ClipView::focusRegained();
 
+	// The save and load browsers blink these; whoever they return to has to switch them off
+	indicator_leds::setLedState(IndicatorLED::SAVE, false);
+	indicator_leds::setLedState(IndicatorLED::LOAD, false);
+	indicator_leds::setLedState(IndicatorLED::BACK, false);
+
 	Clip* clip = getCurrentClip();
 	if (clip) {
 		view.focusRegained();

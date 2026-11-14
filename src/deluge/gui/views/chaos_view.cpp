@@ -28,6 +28,7 @@
 #include "hid/buttons.h"
 #include "hid/display/display.h"
 #include "hid/display/oled.h"
+#include "hid/led/indicator_leds.h"
 #include "hid/led/pad_leds.h"
 #include "model/clip/clip.h"
 #include "model/song/song.h"
@@ -79,6 +80,11 @@ bool ChaosView::opened() {
 
 void ChaosView::focusRegained() {
 	ClipView::focusRegained();
+
+	// The save and load browsers blink these; whoever they return to has to switch them off
+	indicator_leds::setLedState(IndicatorLED::SAVE, false);
+	indicator_leds::setLedState(IndicatorLED::LOAD, false);
+	indicator_leds::setLedState(IndicatorLED::BACK, false);
 
 	Clip* clip = getCurrentClip();
 	if (clip) {
