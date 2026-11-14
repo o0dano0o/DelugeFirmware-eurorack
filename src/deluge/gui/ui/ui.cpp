@@ -487,7 +487,8 @@ EnumStringMap<UIType, util::to_underlying(UIType::UI_TYPE_COUNT)> uiTypeMap = {
       {UIType::TURING, "turing"},
       {UIType::EVOLVE, "evolve"},
       {UIType::VOICE, "voice"},
-      {UIType::EURORACK, "eurorack"}}}};
+      {UIType::EURORACK, "eurorack"},
+      {UIType::MARBLES, "marbles"}}}};
 
 const char* UI::getUIName() {
 	return uiTypeMap(getUIType());

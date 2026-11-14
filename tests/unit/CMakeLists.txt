@@ -63,6 +63,8 @@ file(GLOB_RECURSE deluge_SOURCES
         ../../src/deluge/playback/clock_output_scheduler.cpp
         # For chaos engine tests
         ../../src/deluge/processing/engines/chaos_engine.cpp
+        # For Marbles tests
+        ../../src/deluge/processing/engines/marbles_engine.cpp
         # For output ownership tests
         ../../src/deluge/processing/engines/output_ownership.cpp
         # For Turing machine tests
@@ -88,6 +90,7 @@ add_executable(UnitTests
         chaos_engine_tests.cpp
         turing_engine_tests.cpp
         output_ownership_tests.cpp
+        marbles_engine_tests.cpp
         pitch_tracker_tests.cpp
         quantiser_tests.cpp
         euclid_evolve_tests.cpp

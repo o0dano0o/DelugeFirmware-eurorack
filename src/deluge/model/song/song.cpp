@@ -66,6 +66,7 @@
 #include <cstring>
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/marbles_runner.h"
 #include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
@@ -1435,6 +1436,29 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("chaos");
 	}
 
+	// Marbles-style random (only when it owns an output)
+	if (deluge::marbles::runner::isActive()) {
+		auto marbles = deluge::marbles::runner::getSettings();
+		const auto& mp = marbles.params;
+		writer.writeOpeningTag("marbles");
+		writer.writeTag("cv", marbles.cvMask);
+		writer.writeTag("gates", marbles.gateMask);
+		writer.writeTag("dejaVu", static_cast<int32_t>(mp.dejaVu * 1000.0f + 0.5f));
+		writer.writeTag("length1", mp.length[0]);
+		writer.writeTag("length2", mp.length[1]);
+		writer.writeTag("spread", static_cast<int32_t>(mp.spread * 1000.0f + 0.5f));
+		writer.writeTag("bias", static_cast<int32_t>(mp.bias * 1000.0f + 0.5f));
+		writer.writeTag("steps", static_cast<int32_t>(mp.steps * 1000.0f + 0.5f));
+		writer.writeTag("range", static_cast<int32_t>(mp.rangeVolts * 100.0f + 0.5f));
+		writer.writeTag("jitter", static_cast<int32_t>(mp.jitter * 1000.0f + 0.5f));
+		writer.writeTag("bernoulli", static_cast<int32_t>(mp.bernoulli * 1000.0f + 0.5f));
+		writer.writeTag("gateDivision", mp.gateDivision);
+		writer.writeTag("tempoSync", mp.timeMode == deluge::marbles::TimeMode::TEMPO ? 1 : 0);
+		writer.writeTag("period", static_cast<int32_t>(mp.freePeriod * 1000.0f + 0.5f));
+		writer.writeTag("rate", mp.rate);
+		writer.writeClosingTag("marbles");
+	}
+
 	// Turing machine (only when it is on)
 	if (deluge::turing::runner::isActive()) {
 		auto turing = deluge::turing::runner::getSettings();
@@ -1528,6 +1552,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	// A song without a chaos section leaves chaos off
 	deluge::chaos::runner::resetToDefaults();
 	deluge::turing::runner::resetToDefaults();
+	deluge::marbles::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
 	cvEngine.setMutedGates(0);
@@ -2059,6 +2084,63 @@ unknownTag:
 				}
 				reader.exitTag("chaos", true);
 				deluge::chaos::runner::loadSettings(chaos);
+			}
+
+			else if (!strcmp(tagName, "marbles")) {
+				deluge::marbles::runner::Settings marbles;
+				auto& mp = marbles.params;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "cv")) {
+						marbles.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						marbles.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "dejaVu")) {
+						mp.dejaVu = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "length1")) {
+						mp.length[0] = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "length2")) {
+						mp.length[1] = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "spread")) {
+						mp.spread = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "bias")) {
+						mp.bias = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "steps")) {
+						mp.steps = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "range")) {
+						mp.rangeVolts = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "jitter")) {
+						mp.jitter = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "bernoulli")) {
+						mp.bernoulli = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "gateDivision")) {
+						mp.gateDivision = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						mp.timeMode = reader.readTagOrAttributeValueInt() ? deluge::marbles::TimeMode::TEMPO
+						                                                  : deluge::marbles::TimeMode::FREE;
+					}
+					else if (!strcmp(tagName, "period")) {
+						mp.freePeriod = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "rate")) {
+						mp.rate = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("marbles", true);
+				deluge::marbles::runner::loadSettings(marbles);
 			}
 
 			else if (!strcmp(tagName, "turing")) {
