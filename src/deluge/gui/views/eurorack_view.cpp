@@ -84,21 +84,22 @@ bool isSystemGate(int32_t gate) {
 	return cvEngine.gateChannels[gate].mode == GateType::SPECIAL;
 }
 
+/// Who drives an output, as recorded by the CV engine
 Owner ownerOf(int32_t output) {
 	int32_t channel = channelOf(output);
 	if (isGate(output) && isSystemGate(channel)) {
 		return SYSTEM;
 	}
-	if (deluge::turing::runner::getChannel() == channel) {
-		return TURING;
-	}
-	if (deluge::voice::runner::getChannel() == channel) {
-		return VOICE;
-	}
-	if (isGate(output) ? deluge::chaos::runner::isGateChaos(channel) : deluge::chaos::runner::isCVChaos(channel)) {
+	switch (isGate(output) ? cvEngine.gateOwner(channel) : cvEngine.cvOwner(channel)) {
+	case deluge::owners::Owner::CHAOS:
 		return CHAOS;
+	case deluge::owners::Owner::TURING:
+		return TURING;
+	case deluge::owners::Owner::VOICE:
+		return VOICE;
+	default:
+		return EUCLID;
 	}
-	return EUCLID;
 }
 
 /// Turing and voice use a CV and gate pair, so only channels 1 and 2 can have them
@@ -327,39 +328,29 @@ ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	int32_t channel = channelOf(output);
 	namespace chaos = deluge::chaos::runner;
 
-	// First take the output away from whatever has it. Turing and voice hold a whole CV and gate pair.
-	if (deluge::turing::runner::getChannel() == channel && owner != TURING) {
-		deluge::turing::runner::setChannel(-1);
-	}
-	if (deluge::voice::runner::getChannel() == channel && owner != VOICE) {
-		deluge::voice::runner::setChannel(-1);
-	}
-	if (owner != CHAOS) {
-		if (isGate(output)) {
-			chaos::setGateChaos(channel, false);
-		}
-		else {
-			chaos::setCVChaos(channel, false);
-		}
-	}
+	if (ownerOf(output) != owner) {
+		// First take the output away from whatever has it. A generator that holds a CV and gate pair (Turing, voice)
+		// lets go of both halves, and every generator is told through the CV engine.
+		cvEngine.releaseOutputs(isGate(output) ? 0 : (1 << channel), isGate(output) ? (1 << channel) : 0);
 
-	switch (owner) {
-	case CHAOS:
-		if (isGate(output)) {
-			chaos::setGateChaos(channel, true);
+		switch (owner) {
+		case CHAOS:
+			if (isGate(output)) {
+				chaos::setGateChaos(channel, true);
+			}
+			else {
+				chaos::setCVChaos(channel, true);
+			}
+			break;
+		case TURING:
+			deluge::turing::runner::setChannel(channel);
+			break;
+		case VOICE:
+			deluge::voice::runner::setChannel(channel);
+			break;
+		default:
+			break;
 		}
-		else {
-			chaos::setCVChaos(channel, true);
-		}
-		break;
-	case TURING:
-		deluge::turing::runner::setChannel(channel);
-		break;
-	case VOICE:
-		deluge::voice::runner::setChannel(channel);
-		break;
-	default:
-		break;
 	}
 
 	char text[40];
@@ -441,20 +432,23 @@ ActionResult EurorackView::openOwnerOfRow(int32_t y) {
 	if (output < 0) {
 		return ActionResult::DEALT_WITH;
 	}
-	int32_t channel = channelOf(output);
 	if (!getCurrentClip()) {
 		showNotice("Open a clip first");
 		return ActionResult::DEALT_WITH;
 	}
 	UI* target = nullptr;
-	if (deluge::turing::runner::getChannel() == channel) {
+	switch (ownerOf(output)) {
+	case TURING:
 		target = &turingView;
-	}
-	else if (deluge::voice::runner::getChannel() == channel) {
+		break;
+	case VOICE:
 		target = &voiceView;
-	}
-	else if (isGate(output) ? deluge::chaos::runner::isGateChaos(channel) : deluge::chaos::runner::isCVChaos(channel)) {
+		break;
+	case CHAOS:
 		target = &chaosView;
+		break;
+	default:
+		break;
 	}
 	if (target) {
 		display->cancelPopup();

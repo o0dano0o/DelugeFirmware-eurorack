@@ -18,6 +18,7 @@
 #pragma once
 
 #include "model/drum/gate_drum.h"
+#include "processing/engines/output_ownership.h"
 #include <cstdint>
 
 #define WHICH_GATE_OUTPUT_IS_RUN 2
@@ -96,20 +97,33 @@ public:
 
 	void sendVoltageOut(uint8_t channel, uint16_t voltage);
 
-	/// Chaos mode: while a CV channel's bit is set in this mask, only sendChaosVoltage() may change that channel's
-	/// voltage. Note-ons (e.g. from Euclidean gate rows) no longer write to it. Clearing a bit hands the channel back
-	/// and restores the voltage of the note that was last played on it.
-	void setChaosOwnedCV(uint8_t mask);
-	uint8_t getChaosOwnedCV() const { return chaosOwnedCV_; }
-	/// Writes a DAC code to a chaos-owned CV channel, skipping the write if the value hasn't changed
-	void sendChaosVoltage(uint8_t channel, uint16_t code);
+	/// Generator ownership. Each CV channel and gate has one owner: the normal note path (Owner::NONE) or a generator
+	/// (chaos, Turing machine, voice tracker, ...). While a generator owns an output, note-ons and note-offs no longer
+	/// move it and only that generator's sendOwned...() calls do. Handing an output back restores the voltage of the
+	/// note last played on a CV, and switches a gate off.
+	///
+	/// Gives `owner` exactly these outputs, taking them from whoever held them (their loss handlers are called).
+	/// Gates set to SPECIAL (run/clock) can't be owned. Check what was granted with getOwnedCV(owner) afterwards.
+	void claimOutputs(deluge::owners::Owner owner, uint8_t cvMask, uint8_t gateMask);
+	/// Hands outputs back to the note path, whoever owned them
+	void releaseOutputs(uint8_t cvMask, uint8_t gateMask);
+	deluge::owners::Owner cvOwner(uint8_t channel) const { return ownership_.cvOwner(channel); }
+	deluge::owners::Owner gateOwner(uint8_t channel) const { return ownership_.gateOwner(channel); }
+	/// Outputs owned by `owner` (bit n is channel n), or by any generator
+	uint8_t getOwnedCV(deluge::owners::Owner owner) const { return ownership_.masksOf(owner).cv; }
+	uint8_t getOwnedGates(deluge::owners::Owner owner) const { return ownership_.masksOf(owner).gate; }
+	uint8_t getOwnedCV() const { return ownedCV_; }
+	uint8_t getOwnedGates() const { return ownedGate_; }
+	/// Called when an owner has outputs taken away by someone else. The outputs are already reassigned, so the
+	/// generator should just stop driving them (it may call claimOutputs/releaseOutputs from inside).
+	using LossHandler = void (*)(uint8_t cvLost, uint8_t gateLost);
+	void setLossHandler(deluge::owners::Owner owner, LossHandler handler);
 
-	/// Chaos mode for gates: while a gate's bit is set, note-ons and note-offs for that channel are ignored (CV
-	/// included) and only sendChaosGate() moves it. Gates set to SPECIAL (run/clock) can't be owned. Releasing a
-	/// gate switches it off.
-	void setChaosOwnedGates(uint8_t mask);
-	uint8_t getChaosOwnedGates() const { return chaosOwnedGate_; }
-	void sendChaosGate(uint8_t channel, bool high);
+	/// Writes a DAC code to a CV channel that `owner` owns, skipping the write if the value hasn't changed. Ignored if
+	/// someone else owns the channel.
+	void sendOwnedVoltage(deluge::owners::Owner owner, uint8_t channel, uint16_t code);
+	/// Moves a gate that `owner` owns. Ignored if someone else owns the gate.
+	void sendOwnedGate(deluge::owners::Owner owner, uint8_t channel, bool high);
 
 	/// Output mutes (set from the Eurorack overview). A muted gate stays low whatever drives it. A muted CV freezes at
 	/// the voltage it had; the latest requested voltage is applied again when it is unmuted.
@@ -140,9 +154,12 @@ private:
 	void switchGateOn(int32_t channel, int32_t doInstantlyIfPossible = false);
 	/// signifies there's a gate that can't go until the cv is output
 	bool cvOutPending{false};
-	uint8_t chaosOwnedCV_{0};
-	uint8_t chaosOwnedGate_{0};
-	int32_t lastChaosCode_[NUM_PHYSICAL_CV_CHANNELS] = {-1, -1};
+	void applyOwnership(const deluge::owners::Change& change);
+	deluge::owners::OutputOwnership ownership_;
+	LossHandler lossHandlers_[deluge::owners::kNumOwners] = {};
+	uint8_t ownedCV_{0};   ///< all generator-owned CV channels, kept in step with ownership_ for the note path
+	uint8_t ownedGate_{0}; ///< same for gates
+	int32_t lastOwnedCode_[NUM_PHYSICAL_CV_CHANNELS] = {-1, -1};
 	uint16_t lastVoltageCode_[NUM_PHYSICAL_CV_CHANNELS] = {0, 0};
 	uint16_t wantedVoltageCode_[NUM_PHYSICAL_CV_CHANNELS] = {0, 0};
 	uint8_t mutedGates_ = 0;

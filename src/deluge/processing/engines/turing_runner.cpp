@@ -27,6 +27,8 @@
 
 namespace deluge::turing::runner {
 
+using deluge::owners::Owner;
+
 namespace {
 
 constexpr float kSamplesPerMs = 44.1f;
@@ -94,7 +96,7 @@ void updateChaosRequest() {
 
 void releaseGate() {
 	if (gateHigh && settings.channel >= 0) {
-		cvEngine.sendChaosGate(settings.channel, false);
+		cvEngine.sendOwnedGate(Owner::TURING, settings.channel, false);
 	}
 	gateHigh = false;
 }
@@ -109,7 +111,7 @@ void outputCurrentNote() {
 	int32_t note = kBaseNote + root + offset;
 	int32_t voltage = cvEngine.calculateVoltage(note, settings.channel);
 	voltage = std::max<int32_t>(0, std::min<int32_t>(voltage, 65535));
-	cvEngine.sendChaosVoltage(settings.channel, static_cast<uint16_t>(voltage));
+	cvEngine.sendOwnedVoltage(Owner::TURING, settings.channel, static_cast<uint16_t>(voltage));
 }
 
 void doStep() {
@@ -129,7 +131,7 @@ void doStep() {
 		historyCount++;
 		lastStepTimer = AudioEngine::audioSampleTimer;
 		if (settings.restZero && settings.channel >= 0) {
-			cvEngine.sendChaosVoltage(settings.channel, 0);
+			cvEngine.sendOwnedVoltage(Owner::TURING, settings.channel, 0);
 		}
 		return;
 	}
@@ -154,18 +156,23 @@ void doStep() {
 	lastStepTimer = now;
 
 	outputCurrentNote();
-	cvEngine.sendChaosGate(settings.channel, true);
+	cvEngine.sendOwnedGate(Owner::TURING, settings.channel, true);
 	gateHigh = true;
 	gateOffAt = now + gateSamples;
 }
 
+/// Called by the CV engine when another generator takes our channel
+void onOutputsLost(uint8_t cvLost, uint8_t gateLost) {
+	if (settings.channel >= 0 && ((cvLost | gateLost) & (1 << settings.channel))) {
+		setChannel(-1);
+	}
+}
+
 void claimChannel() {
-	if (settings.channel >= 0) {
-		deluge::chaos::runner::setExternalOwnership(1 << settings.channel, 1 << settings.channel);
-	}
-	else {
-		deluge::chaos::runner::setExternalOwnership(0, 0);
-	}
+	cvEngine.setLossHandler(Owner::TURING, &onOutputsLost);
+	// taking the channel from another generator turns that generator off
+	uint8_t bit = settings.channel >= 0 ? static_cast<uint8_t>(1 << settings.channel) : 0;
+	cvEngine.claimOutputs(Owner::TURING, bit, bit);
 }
 
 } // namespace
@@ -210,9 +217,6 @@ void setChannel(int32_t channel) {
 		return;
 	}
 	releaseGate();
-	if (wanted >= 0 && deluge::voice::runner::getChannel() == wanted) {
-		deluge::voice::runner::setChannel(-1); // the voice tracker can't share the channel
-	}
 	settings.channel = wanted;
 	claimChannel();
 	updateChaosRequest();

@@ -160,7 +160,7 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 	}
 
 	// If chaos is driving this gate, it owns the gate and its CV too
-	if (chaosOwnedGate_ & (1 << channel)) {
+	if (ownedGate_ & (1 << channel)) {
 		return;
 	}
 
@@ -189,8 +189,8 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 		int32_t voltage;
 
 		// If it's not a gate-only note-on...
-		if (note != ALL_NOTES_OFF && channel < NUM_PHYSICAL_CV_CHANNELS && (chaosOwnedCV_ & (1 << channel))) {
-			// Chaos owns this channel's CV, so only the gate follows the note
+		if (note != ALL_NOTES_OFF && channel < NUM_PHYSICAL_CV_CHANNELS && (ownedCV_ & (1 << channel))) {
+			// A generator owns this channel's CV, so only the gate follows the note
 			switchGateOn(channel);
 		}
 		else if (note != ALL_NOTES_OFF) {
@@ -213,36 +213,63 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 	}
 }
 
-void CVEngine::setChaosOwnedCV(uint8_t mask) {
-	mask &= (1 << NUM_PHYSICAL_CV_CHANNELS) - 1;
-	uint8_t released = chaosOwnedCV_ & ~mask;
-	chaosOwnedCV_ = mask;
-	for (uint8_t ch = 0; ch < NUM_PHYSICAL_CV_CHANNELS; ch++) {
-		lastChaosCode_[ch] = -1;
-		if (released & (1 << ch)) {
-			recalculateCVChannelVoltage(ch);
-		}
-	}
+void CVEngine::setLossHandler(deluge::owners::Owner owner, LossHandler handler) {
+	lossHandlers_[static_cast<int32_t>(owner)] = handler;
 }
 
-void CVEngine::setChaosOwnedGates(uint8_t mask) {
-	mask &= (1 << NUM_GATE_CHANNELS) - 1;
+void CVEngine::claimOutputs(deluge::owners::Owner owner, uint8_t cvMask, uint8_t gateMask) {
+	uint8_t systemGates = 0;
 	for (uint8_t ch = 0; ch < NUM_GATE_CHANNELS; ch++) {
 		if (gateChannels[ch].mode == GateType::SPECIAL) {
-			mask &= ~(1 << ch);
+			systemGates |= 1 << ch; // run and clock gates belong to the system
 		}
 	}
-	uint8_t released = chaosOwnedGate_ & ~mask;
-	chaosOwnedGate_ = mask;
+	applyOwnership(ownership_.claim(owner, cvMask, gateMask, systemGates));
+}
+
+void CVEngine::releaseOutputs(uint8_t cvMask, uint8_t gateMask) {
+	applyOwnership(ownership_.release(cvMask, gateMask));
+}
+
+/// Brings the note path in step with the new owners, then tells the owners that lost outputs
+void CVEngine::applyOwnership(const deluge::owners::Change& change) {
+	// Gates and CVs are compared against the previous state, so work out what changed before the cache is updated
+	uint8_t prevCV = ownedCV_;
+	uint8_t prevGate = ownedGate_;
+	deluge::owners::Masks owned = ownership_.owned();
+	ownedCV_ = owned.cv & ((1 << NUM_PHYSICAL_CV_CHANNELS) - 1);
+	ownedGate_ = owned.gate & ((1 << NUM_GATE_CHANNELS) - 1);
+
+	// Whoever writes first after a change must be heard, even if the code equals the last one written
+	for (uint8_t ch = 0; ch < NUM_PHYSICAL_CV_CHANNELS; ch++) {
+		lastOwnedCode_[ch] = -1;
+		if (prevCV & ~ownedCV_ & (1 << ch)) {
+			recalculateCVChannelVoltage(ch); // handed back to the notes
+		}
+	}
+	// A gate that was handed back, taken from a generator, or taken from the notes while high, goes low first
 	for (uint8_t ch = 0; ch < NUM_GATE_CHANNELS; ch++) {
-		if (released & (1 << ch)) {
+		bool wasOwned = prevGate & (1 << ch);
+		bool lost = false;
+		for (int32_t o = 1; o < deluge::owners::kNumOwners; o++) {
+			lost = lost || (change.lost[o].gate & (1 << ch));
+		}
+		bool newlyOwned = !wasOwned && (ownedGate_ & (1 << ch)) && gateChannels[ch].on; // a note's gate was still high
+		if ((wasOwned && (!(ownedGate_ & (1 << ch)) || lost)) || newlyOwned) {
 			switchGateOff(ch);
 		}
 	}
+
+	for (int32_t o = 1; o < deluge::owners::kNumOwners; o++) {
+		const deluge::owners::Masks& lost = change.lost[o];
+		if (lost.any() && lossHandlers_[o] != nullptr) {
+			lossHandlers_[o](lost.cv, lost.gate);
+		}
+	}
 }
 
-void CVEngine::sendChaosGate(uint8_t channel, bool high) {
-	if (channel >= NUM_GATE_CHANNELS || !(chaosOwnedGate_ & (1 << channel))) {
+void CVEngine::sendOwnedGate(deluge::owners::Owner owner, uint8_t channel, bool high) {
+	if (channel >= NUM_GATE_CHANNELS || ownership_.gateOwner(channel) != owner) {
 		return;
 	}
 	if (gateChannels[channel].on == high) {
@@ -256,14 +283,14 @@ void CVEngine::sendChaosGate(uint8_t channel, bool high) {
 	}
 }
 
-void CVEngine::sendChaosVoltage(uint8_t channel, uint16_t code) {
-	if (channel >= NUM_PHYSICAL_CV_CHANNELS || !(chaosOwnedCV_ & (1 << channel))) {
+void CVEngine::sendOwnedVoltage(deluge::owners::Owner owner, uint8_t channel, uint16_t code) {
+	if (channel >= NUM_PHYSICAL_CV_CHANNELS || ownership_.cvOwner(channel) != owner) {
 		return;
 	}
-	if (lastChaosCode_[channel] == code) {
+	if (lastOwnedCode_[channel] == code) {
 		return;
 	}
-	lastChaosCode_[channel] = code;
+	lastOwnedCode_[channel] = code;
 	sendVoltageOut(channel, quantiseCode(channel, code));
 }
 
@@ -283,8 +310,8 @@ void CVEngine::setQuantisedCV(uint8_t mask) {
 	uint8_t changed = quantisedCV_ ^ mask;
 	quantisedCV_ = mask;
 	for (uint8_t ch = 0; ch < NUM_PHYSICAL_CV_CHANNELS; ch++) {
-		if ((changed & (1 << ch)) && (chaosOwnedCV_ & (1 << ch)) && lastChaosCode_[ch] >= 0) {
-			sendVoltageOut(ch, quantiseCode(ch, static_cast<uint16_t>(lastChaosCode_[ch])));
+		if ((changed & (1 << ch)) && (ownedCV_ & (1 << ch)) && lastOwnedCode_[ch] >= 0) {
+			sendVoltageOut(ch, quantiseCode(ch, static_cast<uint16_t>(lastOwnedCode_[ch])));
 		}
 	}
 }
@@ -382,7 +409,7 @@ void CVEngine::setCVPitchBend(uint8_t channel, int32_t value, bool outputToo) {
 // Does it even if the corresponding gate isn't "on", because the note might still be audible on the connected physical
 // synth
 void CVEngine::recalculateCVChannelVoltage(uint8_t channel) {
-	if (chaosOwnedCV_ & (1 << channel)) {
+	if (ownedCV_ & (1 << channel)) {
 		return;
 	}
 	int32_t voltage = calculateVoltage(cvChannels[channel].noteCurrentlyPlaying, channel);

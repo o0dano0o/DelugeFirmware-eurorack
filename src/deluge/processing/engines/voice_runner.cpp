@@ -30,6 +30,8 @@
 
 namespace deluge::voice::runner {
 
+using deluge::owners::Owner;
+
 namespace {
 
 constexpr int32_t kRingSize = 8192; ///< input frames kept between scheduler runs (power of two), ~190 ms
@@ -95,19 +97,23 @@ void releaseChannel(int32_t channel) {
 	loopGateHigh = false;
 	if (channel >= 0) {
 		CVEngine& cv = cvEngine;
-		cv.sendChaosGate(channel, false);
+		cv.sendOwnedGate(Owner::VOICE, channel, false);
 	}
 	gateSent = false;
 }
 
+/// Called by the CV engine when another generator takes our channel
+void onOutputsLost(uint8_t cvLost, uint8_t gateLost) {
+	if (settings.channel >= 0 && ((cvLost | gateLost) & (1 << settings.channel))) {
+		setChannel(-1);
+	}
+}
+
 void claim() {
-	if (settings.channel >= 0) {
-		uint8_t bit = 1 << settings.channel;
-		deluge::chaos::runner::setExternalOwnership(1, bit, bit);
-	}
-	else {
-		deluge::chaos::runner::setExternalOwnership(1, 0, 0);
-	}
+	cvEngine.setLossHandler(Owner::VOICE, &onOutputsLost);
+	// taking the channel from another generator turns that generator off
+	uint8_t bit = settings.channel >= 0 ? static_cast<uint8_t>(1 << settings.channel) : 0;
+	cvEngine.claimOutputs(Owner::VOICE, bit, bit);
 }
 
 /// Voltage code for a (possibly fractional) note, by interpolating between neighbouring semitones
@@ -143,12 +149,12 @@ void outputNote(float note) {
 		return;
 	}
 	note += 12.0f * settings.octaveShift;
-	cvEngine.sendChaosVoltage(settings.channel, static_cast<uint16_t>(codeForNote(note, settings.channel)));
+	cvEngine.sendOwnedVoltage(Owner::VOICE, settings.channel, static_cast<uint16_t>(codeForNote(note, settings.channel)));
 }
 
 void loopGate(bool high) {
 	if (settings.channel >= 0) {
-		cvEngine.sendChaosGate(settings.channel, high);
+		cvEngine.sendOwnedGate(Owner::VOICE, settings.channel, high);
 	}
 	loopGateHigh = high;
 }
@@ -163,7 +169,7 @@ void emitLoop(bool gate, uint8_t note) {
 /// Hands the output over to the phrase (or back to the live voice): closes whatever gate is open
 void beginPhrasePlayback() {
 	if (gateSent) {
-		cvEngine.sendChaosGate(settings.channel, false);
+		cvEngine.sendOwnedGate(Owner::VOICE, settings.channel, false);
 		gateSent = false;
 	}
 	phrase.start(loopNow(), settings.loopOneShot);
@@ -183,7 +189,7 @@ void outputPitch() {
 	}
 	float note = settings.quantise ? static_cast<float>(follower.note()) : follower.pitch();
 	note += 12.0f * settings.octaveShift;
-	cvEngine.sendChaosVoltage(settings.channel, static_cast<uint16_t>(codeForNote(note, settings.channel)));
+	cvEngine.sendOwnedVoltage(Owner::VOICE, settings.channel, static_cast<uint16_t>(codeForNote(note, settings.channel)));
 }
 
 } // namespace
@@ -220,10 +226,6 @@ void setChannel(int32_t channel) {
 	settings.channel = wanted;
 	if (wanted >= 0) {
 		lastChannel = wanted;
-		// the Turing machine can't share the channel
-		if (deluge::turing::runner::getChannel() == wanted) {
-			deluge::turing::runner::setChannel(-1);
-		}
 		tracker.reset();
 		follower.reset();
 		tracker.setLevelThreshold(kThresholds[settings.sensitivity]);
@@ -341,7 +343,7 @@ void tick() {
 				if (follower.gate()) {
 					outputPitch();
 				}
-				cvEngine.sendChaosGate(settings.channel, follower.gate());
+				cvEngine.sendOwnedGate(Owner::VOICE, settings.channel, follower.gate());
 				gateSent = follower.gate();
 				if (follower.gate()) {
 					lastNote = follower.note();

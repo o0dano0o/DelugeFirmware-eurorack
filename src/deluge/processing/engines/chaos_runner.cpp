@@ -24,6 +24,8 @@
 
 namespace deluge::chaos::runner {
 
+using deluge::owners::Owner;
+
 namespace {
 constexpr float kStepSeconds = 0.002f;
 constexpr float kSamplesPerSecond = 44100.0f;
@@ -45,10 +47,6 @@ uint32_t lastSampleTimer = 0;
 float pendingSeconds = 0.0f;
 uint8_t lastGates = 0;
 uint8_t prevGateMask = 0; ///< gateMask as of the last apply(), to tell which gates were just claimed
-uint8_t extCV = 0;        ///< channels claimed by other generators (all owners combined)
-uint8_t extGate = 0;
-uint8_t extCVBy[2] = {0, 0}; ///< per owner: 0 Turing machine, 1 voice tracker
-uint8_t extGateBy[2] = {0, 0};
 bool engineRequested = false;
 uint32_t riseCount[kNumGateRules] = {};
 uint32_t lastRise[kNumGateRules] = {};
@@ -64,7 +62,7 @@ float currentBpm() {
 void writeOutputs() {
 	for (uint8_t ch = 0; ch < kNumCVOutputs; ch++) {
 		if (cvMask & (1 << ch)) {
-			cvEngine.sendChaosVoltage(ch, chaosEngine.getCVCode(ch));
+			cvEngine.sendOwnedVoltage(Owner::CHAOS, ch, chaosEngine.getCVCode(ch));
 		}
 	}
 	uint8_t gates = chaosEngine.getGateLevels();
@@ -77,7 +75,7 @@ void writeOutputs() {
 			riseCount[g]++;
 		}
 		if ((changed & (1 << g)) && (gateMask & (1 << g))) {
-			cvEngine.sendChaosGate(g, gates & (1 << g));
+			cvEngine.sendOwnedGate(Owner::CHAOS, g, gates & (1 << g));
 		}
 	}
 }
@@ -95,14 +93,23 @@ bool engineWanted() {
 	return cvMask || gateMask || engineRequested || anyProb();
 }
 
+/// Called by the CV engine when another generator takes outputs from chaos
+void onOutputsLost(uint8_t cvLost, uint8_t gateLost) {
+	cvMask &= ~cvLost;
+	gateMask &= ~gateLost;
+	lastGates &= gateMask;
+	prevGateMask = gateMask;
+}
+
 /// Hands the masks to the CV engine. Starts the chaos engine running if this is the first thing to want it.
 void apply(bool wasRunning) {
-	cvMask &= ~extCV;
-	gateMask &= ~extGate;
-	cvEngine.setChaosOwnedCV(cvMask | extCV);
-	cvEngine.setChaosOwnedGates(gateMask | extGate);
+	cvEngine.setLossHandler(Owner::CHAOS, &onOutputsLost);
+	// chaos never takes an output from another generator; it only gets the ones that are free or already its own
+	cvMask &= ~(cvEngine.getOwnedCV() & ~cvEngine.getOwnedCV(Owner::CHAOS));
+	gateMask &= ~(cvEngine.getOwnedGates() & ~cvEngine.getOwnedGates(Owner::CHAOS));
+	cvEngine.claimOutputs(Owner::CHAOS, cvMask, gateMask);
 	// gates the CV engine refused (run/clock) aren't ours
-	gateMask = cvEngine.getChaosOwnedGates() & ~extGate;
+	gateMask = cvEngine.getOwnedGates(Owner::CHAOS);
 
 	if (!wasRunning && engineWanted()) {
 		chaosEngine.reset();
@@ -174,19 +181,6 @@ bool allowNoteOn(int32_t gate) {
 	}
 	float x = chaosEngine.getNormalised(probSource[gate] - 1, 0);
 	return roller.roll(probability::passProbability(x, probDepth));
-}
-
-void setExternalOwnership(int32_t owner, uint8_t cvBits, uint8_t gateBits) {
-	bool was = engineWanted();
-	extCVBy[owner & 1] = cvBits & ((1 << kNumCVOutputs) - 1);
-	extGateBy[owner & 1] = gateBits & ((1 << kNumGateRules) - 1);
-	extCV = extCVBy[0] | extCVBy[1];
-	extGate = extGateBy[0] | extGateBy[1];
-	apply(was);
-}
-
-void setExternalOwnership(uint8_t cvBits, uint8_t gateBits) {
-	setExternalOwnership(0, cvBits, gateBits);
 }
 
 void requestEngine(bool wanted) {
