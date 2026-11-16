@@ -67,6 +67,7 @@
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/rungler_runner.h"
 #include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
@@ -1459,6 +1460,25 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("marbles");
 	}
 
+	// Rungler (only when it owns an output)
+	if (deluge::rungler::runner::isActive()) {
+		auto rungler = deluge::rungler::runner::getSettings();
+		const auto& rp = rungler.params;
+		writer.writeOpeningTag("rungler");
+		writer.writeTag("cv", rungler.cvMask);
+		writer.writeTag("gates", rungler.gateMask);
+		writer.writeTag("chance", static_cast<int32_t>(rp.chance * 1000.0f + 0.5f));
+		writer.writeTag("mod", static_cast<int32_t>(rp.modAmount * 1000.0f + 0.5f));
+		writer.writeTag("slew", static_cast<int32_t>(rp.slew * 1000.0f + 0.5f));
+		writer.writeTag("range", static_cast<int32_t>(rp.rangeVolts * 100.0f + 0.5f));
+		writer.writeTag("tempoSync", rp.timeMode == deluge::marbles::TimeMode::TEMPO ? 1 : 0);
+		writer.writeTag("freqA", static_cast<int32_t>(rp.freqA * 100.0f + 0.5f));
+		writer.writeTag("freqB", static_cast<int32_t>(rp.freqB * 100.0f + 0.5f));
+		writer.writeTag("rateA", rp.rateA);
+		writer.writeTag("rateB", rp.rateB);
+		writer.writeClosingTag("rungler");
+	}
+
 	// Turing machine (only when it is on)
 	if (deluge::turing::runner::isActive()) {
 		auto turing = deluge::turing::runner::getSettings();
@@ -1553,6 +1573,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::chaos::runner::resetToDefaults();
 	deluge::turing::runner::resetToDefaults();
 	deluge::marbles::runner::resetToDefaults();
+	deluge::rungler::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
 	cvEngine.setMutedGates(0);
@@ -2141,6 +2162,51 @@ unknownTag:
 				}
 				reader.exitTag("marbles", true);
 				deluge::marbles::runner::loadSettings(marbles);
+			}
+
+			else if (!strcmp(tagName, "rungler")) {
+				deluge::rungler::runner::Settings rungler;
+				auto& rp = rungler.params;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "cv")) {
+						rungler.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						rungler.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "chance")) {
+						rp.chance = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "mod")) {
+						rp.modAmount = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "slew")) {
+						rp.slew = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "range")) {
+						rp.rangeVolts = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						rp.timeMode = reader.readTagOrAttributeValueInt() ? deluge::marbles::TimeMode::TEMPO
+						                                                  : deluge::marbles::TimeMode::FREE;
+					}
+					else if (!strcmp(tagName, "freqA")) {
+						rp.freqA = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "freqB")) {
+						rp.freqB = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "rateA")) {
+						rp.rateA = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "rateB")) {
+						rp.rateB = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("rungler", true);
+				deluge::rungler::runner::loadSettings(rungler);
 			}
 
 			else if (!strcmp(tagName, "turing")) {

@@ -62,6 +62,7 @@
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/rungler_runner.h"
 #include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
@@ -593,6 +594,8 @@ void registerTasks() {
 	addRepeatingTask([]() { deluge::turing::runner::tick(); }, p++, 0.001, 0.002, 0.005, "turing", RESOURCE_NONE);
 	// Marbles-style random voltages and gates (does nothing unless Marbles owns an output)
 	addRepeatingTask([]() { deluge::marbles::runner::tick(); }, p++, 0.001, 0.003, 0.01, "marbles", RESOURCE_NONE);
+	// Rungler (does nothing unless it owns an output)
+	addRepeatingTask([]() { deluge::rungler::runner::tick(); }, p++, 0.001, 0.003, 0.01, "rungler", RESOURCE_NONE);
 	// Euclidean tracks changing each other over time
 	addRepeatingTask([]() { deluge::euclid::evolver::tick(); }, p++, 0.002, 0.005, 0.01, "evolve", RESOURCE_NONE);
 	// live voice-to-CV pitch tracking (does nothing while off)

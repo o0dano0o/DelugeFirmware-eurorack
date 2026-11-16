@@ -25,6 +25,7 @@
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/session_view.h"
 #include "gui/views/marbles_view.h"
+#include "gui/views/rungler_view.h"
 #include "gui/views/turing_view.h"
 #include "gui/views/view.h"
 #include "gui/views/voice_view.h"
@@ -39,6 +40,7 @@
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/cv_engine.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/rungler_runner.h"
 #include "processing/engines/turing_runner.h"
 #include "processing/engines/voice_runner.h"
 #include <algorithm>
@@ -52,7 +54,7 @@ EurorackView eurorackView{};
 
 namespace {
 
-enum Owner : uint8_t { EUCLID, CHAOS, TURING, VOICE, MARBLES, SYSTEM, kNumOwners = SYSTEM };
+enum Owner : uint8_t { EUCLID, CHAOS, TURING, VOICE, MARBLES, RUNGLER, SYSTEM, kNumOwners = SYSTEM };
 
 constexpr int32_t kNumGates = 4;
 constexpr int32_t kNumCVs = 2;
@@ -61,10 +63,10 @@ constexpr int32_t kMeterStart = kNumOwners + 1;
 constexpr int32_t kMeterWidth = kDisplayWidth - kMeterStart;
 constexpr int32_t kHoldMs = 120;
 
-const RGB kOwnerColour[kNumOwners] = {RGB{230, 230, 230}, RGB{200, 40, 255}, RGB{30, 220, 40}, RGB{255, 40, 110}, RGB{40, 160, 255}};
+const RGB kOwnerColour[kNumOwners] = {RGB{230, 230, 230}, RGB{200, 40, 255}, RGB{30, 220, 40}, RGB{255, 40, 110}, RGB{40, 160, 255}, RGB{255, 140, 40}};
 const RGB kSystemColour{60, 60, 60};
 
-char const* const kOwnerNames[kNumOwners] = {"Euclid", "Chaos", "Turing", "Voice", "Marbles"};
+char const* const kOwnerNames[kNumOwners] = {"Euclid", "Chaos", "Turing", "Voice", "Marbles", "Rungler"};
 
 /// Output index 0-3 are gates 1-4, 4-5 are CV 1-2
 /// Rows from the top: gate 1, CV 1, gap, gate 2, CV 2, gap, gate 3, gate 4 (-1 is a gap)
@@ -102,6 +104,8 @@ Owner ownerOf(int32_t output) {
 		return VOICE;
 	case deluge::owners::Owner::MARBLES:
 		return MARBLES;
+	case deluge::owners::Owner::RUNGLER:
+		return RUNGLER;
 	default:
 		return EUCLID;
 	}
@@ -357,6 +361,14 @@ ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 		case VOICE:
 			deluge::voice::runner::setChannel(channel);
 			break;
+		case RUNGLER:
+			if (isGate(output)) {
+				deluge::rungler::runner::setGateRungler(channel, true);
+			}
+			else {
+				deluge::rungler::runner::setCVRungler(channel, true);
+			}
+			break;
 		case MARBLES:
 			if (isGate(output)) {
 				deluge::marbles::runner::setGateMarbles(channel, true);
@@ -463,6 +475,9 @@ ActionResult EurorackView::openOwnerOfRow(int32_t y) {
 		break;
 	case MARBLES:
 		target = &marblesView;
+		break;
+	case RUNGLER:
+		target = &runglerView;
 		break;
 	case CHAOS:
 		target = &chaosView;
