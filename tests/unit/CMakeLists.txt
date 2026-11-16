@@ -66,6 +66,7 @@ file(GLOB_RECURSE deluge_SOURCES
         # For Marbles tests
         ../../src/deluge/processing/engines/marbles_engine.cpp
         ../../src/deluge/processing/engines/rungler_engine.cpp
+        ../../src/deluge/processing/engines/neurons_engine.cpp
         # For output ownership tests
         ../../src/deluge/processing/engines/output_ownership.cpp
         # For Turing machine tests
@@ -93,6 +94,7 @@ add_executable(UnitTests
         output_ownership_tests.cpp
         marbles_engine_tests.cpp
         rungler_engine_tests.cpp
+        neurons_engine_tests.cpp
         pitch_tracker_tests.cpp
         quantiser_tests.cpp
         euclid_evolve_tests.cpp
