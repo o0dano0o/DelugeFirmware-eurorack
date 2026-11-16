@@ -24,7 +24,7 @@
 /// is a generator that writes the output itself.
 namespace deluge::owners {
 
-enum class Owner : uint8_t { NONE = 0, CHAOS, TURING, VOICE, MARBLES, RUNGLER, kCount };
+enum class Owner : uint8_t { NONE = 0, CHAOS, TURING, VOICE, MARBLES, RUNGLER, NEURONS, kCount };
 
 constexpr int32_t kNumOwners = static_cast<int32_t>(Owner::kCount);
 constexpr int32_t kNumCVOutputs = 2;

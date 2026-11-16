@@ -67,6 +67,7 @@
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
 #include "processing/engines/euclid_evolver.h"
 #include "processing/engines/turing_runner.h"
@@ -1460,6 +1461,31 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("marbles");
 	}
 
+	// Neuron network (only when it owns an output)
+	if (deluge::neurons::runner::isActive()) {
+		auto neurons = deluge::neurons::runner::getSettings();
+		const auto& np = neurons.params;
+		writer.writeOpeningTag("neurons");
+		writer.writeTag("cv", neurons.cvMask);
+		writer.writeTag("gates", neurons.gateMask);
+		writer.writeTag("leak", static_cast<int32_t>(np.leak * 1000.0f + 0.5f));
+		writer.writeTag("noise", static_cast<int32_t>(np.noise * 1000.0f + 0.5f));
+		writer.writeTag("range", static_cast<int32_t>(np.rangeVolts * 100.0f + 0.5f));
+		writer.writeTag("tempoSync", np.timeMode == deluge::marbles::TimeMode::TEMPO ? 1 : 0);
+		writer.writeTag("src1", np.cvSource[0]);
+		writer.writeTag("src2", np.cvSource[1]);
+		for (int32_t i = 0; i < deluge::neurons::kNumNeurons; i++) {
+			char name[8];
+			snprintf(name, sizeof(name), "rate%d", static_cast<int>(i + 1));
+			writer.writeTag(name, static_cast<int32_t>(np.rate[i] * 100.0f + 0.5f));
+			for (int32_t j = 0; j < deluge::neurons::kNumNeurons; j++) {
+				snprintf(name, sizeof(name), "w%d%d", static_cast<int>(i), static_cast<int>(j));
+				writer.writeTag(name, np.weight[i][j] + deluge::neurons::kMaxWeightLevel); // saved as 0 to 4
+			}
+		}
+		writer.writeClosingTag("neurons");
+	}
+
 	// Rungler (only when it owns an output)
 	if (deluge::rungler::runner::isActive()) {
 		auto rungler = deluge::rungler::runner::getSettings();
@@ -1574,6 +1600,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::turing::runner::resetToDefaults();
 	deluge::marbles::runner::resetToDefaults();
 	deluge::rungler::runner::resetToDefaults();
+	deluge::neurons::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
 	cvEngine.setMutedGates(0);
@@ -2162,6 +2189,50 @@ unknownTag:
 				}
 				reader.exitTag("marbles", true);
 				deluge::marbles::runner::loadSettings(marbles);
+			}
+
+			else if (!strcmp(tagName, "neurons")) {
+				deluge::neurons::runner::Settings neurons;
+				auto& np = neurons.params;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "cv")) {
+						neurons.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						neurons.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "leak")) {
+						np.leak = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "noise")) {
+						np.noise = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "range")) {
+						np.rangeVolts = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						np.timeMode = reader.readTagOrAttributeValueInt() ? deluge::marbles::TimeMode::TEMPO
+						                                                  : deluge::marbles::TimeMode::FREE;
+					}
+					else if (!strcmp(tagName, "src1")) {
+						np.cvSource[0] = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (!strcmp(tagName, "src2")) {
+						np.cvSource[1] = static_cast<uint8_t>(reader.readTagOrAttributeValueInt());
+					}
+					else if (strlen(tagName) == 5 && !strncmp(tagName, "rate", 4) && tagName[4] >= '1' && tagName[4] <= '4') {
+						np.rate[tagName[4] - '1'] = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (strlen(tagName) == 3 && tagName[0] == 'w' && tagName[1] >= '0' && tagName[1] <= '3'
+					         && tagName[2] >= '0' && tagName[2] <= '3') {
+						np.weight[tagName[1] - '0'][tagName[2] - '0'] = static_cast<int8_t>(
+						    reader.readTagOrAttributeValueInt() - deluge::neurons::kMaxWeightLevel);
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("neurons", true);
+				deluge::neurons::runner::loadSettings(neurons);
 			}
 
 			else if (!strcmp(tagName, "rungler")) {
