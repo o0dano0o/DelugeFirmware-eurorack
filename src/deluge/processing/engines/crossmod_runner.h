@@ -24,15 +24,15 @@
 /// settings that routes point at. Sources and targets are listed here, in one place.
 namespace deluge::crossmod::runner {
 
-constexpr int32_t kNumSources = 13;
-constexpr int32_t kNumTargets = 13;
+constexpr int32_t kNumSources = 16;
+constexpr int32_t kNumTargets = 14;
 
 /// Full names for the OLED, and four-character tags for the 7-segment display
 char const* sourceName(int32_t source);
 char const* sourceTag(int32_t source);
 char const* targetName(int32_t target);
 char const* targetTag(int32_t target);
-/// A colour family for the pads: 0 chaos, 1 Marbles, 2 Rungler, 3 Neurons, 4 Turing
+/// A colour family for the pads: 0 chaos, 1 Marbles, 2 Rungler, 3 Neurons, 4 Turing, 5 Euclid
 int32_t sourceFamily(int32_t source);
 int32_t targetFamily(int32_t target);
 /// True if the generator that owns this source / target is running right now
@@ -51,6 +51,9 @@ CrossmodEngine& engine();
 
 /// The current value of a source, 0 to 1 (0.5 if that generator is not running)
 float sourceValue(int32_t source);
+
+/// Called by the CV engine whenever a Euclid (note) hit plays on a gate, so Euclid hits can be used as a source
+void noteHit(int32_t gate);
 
 /// Called from the scheduler
 void tick();

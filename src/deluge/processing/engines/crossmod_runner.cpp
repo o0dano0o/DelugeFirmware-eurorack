@@ -16,6 +16,7 @@
  */
 
 #include "processing/engines/crossmod_runner.h"
+#include "processing/engines/audio_engine.h"
 #include "processing/engines/chaos_engine.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
@@ -31,6 +32,23 @@ namespace {
 CrossmodEngine crossmodEngine;
 
 constexpr float kChaosCouplingMax = 0.3f;
+constexpr uint32_t kHitDecaySamples = 13230; ///< a hit fades over about 0.3 s
+constexpr int32_t kNumHitGates = 4;
+
+uint32_t lastHit[kNumHitGates] = {};
+bool everHit[kNumHitGates] = {};
+
+/// 0.5 when idle, jumps to 1 on a hit and fades back to 0.5, so an idle gate has no effect on its target
+float hitLevel(int32_t gate) {
+	if (!everHit[gate]) {
+		return 0.5f;
+	}
+	uint32_t age = AudioEngine::audioSampleTimer - lastHit[gate];
+	if (age >= kHitDecaySamples) {
+		return 0.5f;
+	}
+	return 0.5f + 0.5f * (1.0f - static_cast<float>(age) / static_cast<float>(kHitDecaySamples));
+}
 
 float clamp01(float v) {
 	return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
@@ -47,7 +65,7 @@ const Info kSources[kNumSources] = {
     {"Chaos A", "CxA", 0},     {"Chaos B", "CxB", 0},     {"Chaos C", "CxC", 0},     {"Marbles X1", "M-1", 1},
     {"Marbles X2", "M-2", 1},  {"Rungler CV 1", "r-1", 2}, {"Rungler CV 2", "r-2", 2}, {"Neuron 1", "n-1", 3},
     {"Neuron 2", "n-2", 3},    {"Neuron 3", "n-3", 3},    {"Neuron 4", "n-4", 3},    {"Neurons average", "n-A", 3},
-    {"Turing note", "tn", 4},
+    {"Turing note", "tn", 4},     {"Euclid any hit", "EAny", 5}, {"Euclid gate 1 hits", "E-1", 5}, {"Euclid gate 2 hits", "E-2", 5},
 };
 
 const Info kTargets[kNumTargets] = {
@@ -55,7 +73,7 @@ const Info kTargets[kNumTargets] = {
     {"Marbles steps", "MSt", 1},      {"Marbles jitter", "MJt", 1},    {"Marbles Bernoulli", "Mbn", 1},
     {"Rungler chance", "rCh", 2},     {"Rungler mod", "rMd", 2},       {"Rungler slew", "rSl", 2},
     {"Turing flip chance", "tFP", 4}, {"Neurons noise", "nNo", 3},     {"Neurons leak", "nLk", 3},
-    {"Chaos coupling", "CCp", 0},
+    {"Chaos coupling", "CCp", 0}, {"Euclid chaos depth", "EdEP", 5},
 };
 
 } // namespace
@@ -90,8 +108,10 @@ bool familyRunning(int32_t family) {
 		return deluge::rungler::runner::isActive();
 	case 3:
 		return deluge::neurons::runner::isActive();
-	default:
+	case 4:
 		return deluge::turing::runner::isActive();
+	default:
+		return true; // Euclid is always there
 	}
 }
 } // namespace
@@ -134,8 +154,17 @@ float sourceValue(int32_t s) {
 		}
 		return clamp01(sum / static_cast<float>(deluge::neurons::kNumNeurons));
 	}
-	default:
+	case 12:
 		return clamp01(static_cast<float>(deluge::turing::runner::getHistoryValue(0)) / 255.0f);
+	case 13: {
+		float best = 0.5f;
+		for (int32_t g = 0; g < kNumHitGates; g++) {
+			best = std::max(best, hitLevel(g));
+		}
+		return best;
+	}
+	default:
+		return hitLevel(s - 14);
 	}
 }
 
@@ -167,8 +196,10 @@ float readTarget(int32_t t) {
 		return deluge::neurons::runner::engine().params().noise;
 	case 11:
 		return deluge::neurons::runner::engine().params().leak;
-	default:
+	case 12:
 		return deluge::chaos::runner::engine().getCoupling() / kChaosCouplingMax;
+	default:
+		return deluge::chaos::runner::getProbDepth();
 	}
 }
 
@@ -211,8 +242,11 @@ void writeTarget(int32_t t, float v) {
 	case 11:
 		deluge::neurons::runner::engine().setLeak(v);
 		break;
-	default:
+	case 12:
 		deluge::chaos::runner::engine().setCoupling(v * kChaosCouplingMax);
+		break;
+	default:
+		deluge::chaos::runner::setProbDepth(v);
 		break;
 	}
 }
@@ -249,6 +283,13 @@ bool isUsed() {
 
 CrossmodEngine& engine() {
 	return crossmodEngine;
+}
+
+void noteHit(int32_t gate) {
+	if (gate >= 0 && gate < kNumHitGates) {
+		lastHit[gate] = AudioEngine::audioSampleTimer;
+		everHit[gate] = true;
+	}
 }
 
 void tick() {

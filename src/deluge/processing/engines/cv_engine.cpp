@@ -25,6 +25,7 @@
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
+#include "processing/engines/crossmod_runner.h"
 #include "processing/engines/euclid_evolver.h"
 #include "processing/engines/quantiser.h"
 #include "processing/engines/turing_runner.h"
@@ -170,6 +171,9 @@ void CVEngine::sendNote(bool on, uint8_t channel, int16_t note) {
 	// A gate still playing its Euclidean pattern can have its hits thinned by chaos
 	if (on && !deluge::chaos::runner::allowNoteOn(channel)) {
 		return;
+	}
+	if (on) {
+		deluge::crossmod::runner::noteHit(channel); // lets Euclid hits steer other generators
 	}
 
 	// Note-off
