@@ -60,6 +60,7 @@ const RGB kDejaVuColour{180, 120, 255};
 const RGB kGateColour{40, 160, 255};
 
 char const* const kPageNames[kNumPages] = {"Voltage", "Shape", "Clock", "Gates"};
+char const* const kPageNamesShort[kNumPages] = {"VoLt", "SHPE", "CLK", "GAtE"};
 
 float clamp01(float v) {
 	return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
@@ -200,43 +201,72 @@ bool MarblesView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth + 
 
 void MarblesView::pageValueText(int32_t knob, char* out, size_t size) const {
 	const Params& p = runner::engine().params();
+	// The 7-segment display shows four characters, so every value there is a one-letter tag plus the number:
+	// S spread, b bias, t steps, r range (volts), d rate (note division), H rate (Hz), J jitter,
+	// n Bernoulli, g gate 4 division
+	bool oled = display->haveOLED();
 	switch (page_) {
 	case 0:
 		if (knob == 0) {
-			snprintf(out, size, "Spread %d%%", static_cast<int>(percent(p.spread)));
+			snprintf(out, size, oled ? "Spread %d%%" : "S%d", static_cast<int>(percent(p.spread)));
 		}
 		else {
-			snprintf(out, size, "Bias %d%%", static_cast<int>(percent(p.bias)));
+			snprintf(out, size, oled ? "Bias %d%%" : "b%d", static_cast<int>(percent(p.bias)));
 		}
 		break;
 	case 1:
 		if (knob == 0) {
-			snprintf(out, size, "Steps %d%%", static_cast<int>(percent(p.steps)));
+			snprintf(out, size, oled ? "Steps %d%%" : "t%d", static_cast<int>(percent(p.steps)));
 		}
 		else {
-			snprintf(out, size, "Range %d.%d V", static_cast<int>(p.rangeVolts), static_cast<int>(p.rangeVolts * 10.0f) % 10);
+			int32_t tenths = static_cast<int32_t>(p.rangeVolts * 10.0f + 0.5f);
+			if (oled) {
+				snprintf(out, size, "Range %d.%d V", static_cast<int>(tenths / 10), static_cast<int>(tenths % 10));
+			}
+			else if (tenths >= 100) {
+				snprintf(out, size, "r 10");
+			}
+			else {
+				snprintf(out, size, "r%d.%d", static_cast<int>(tenths / 10), static_cast<int>(tenths % 10));
+			}
 		}
 		break;
 	case 2:
 		if (knob == 0) {
 			if (p.timeMode == TimeMode::TEMPO) {
-				snprintf(out, size, "Rate %s", rateName(p.rate));
+				// rateName gives 1 bar, 1/2, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32
+				static char const* const kShort[kNumRates] = {"d 1", "d 2", "d 4", "d 8", "d8t", "d16", "d16t", "d32"};
+				int32_t r = p.rate < 0 ? 0 : (p.rate >= kNumRates ? kNumRates - 1 : p.rate);
+				if (oled) {
+					snprintf(out, size, "Rate %s (tempo)", rateName(p.rate));
+				}
+				else {
+					snprintf(out, size, "%s", kShort[r]);
+				}
 			}
 			else {
 				int32_t tenthsHz = static_cast<int32_t>(10.0f / p.freePeriod + 0.5f);
-				snprintf(out, size, "Rate %d.%d Hz", static_cast<int>(tenthsHz / 10), static_cast<int>(tenthsHz % 10));
+				if (oled) {
+					snprintf(out, size, "Rate %d.%d Hz (free)", static_cast<int>(tenthsHz / 10), static_cast<int>(tenthsHz % 10));
+				}
+				else if (tenthsHz >= 100) {
+					snprintf(out, size, "H%2d", static_cast<int>(tenthsHz / 10));
+				}
+				else {
+					snprintf(out, size, "H%d.%d", static_cast<int>(tenthsHz / 10), static_cast<int>(tenthsHz % 10));
+				}
 			}
 		}
 		else {
-			snprintf(out, size, "Jitter %d%%", static_cast<int>(percent(p.jitter)));
+			snprintf(out, size, oled ? "Jitter %d%%" : "J%d", static_cast<int>(percent(p.jitter)));
 		}
 		break;
 	default:
 		if (knob == 0) {
-			snprintf(out, size, "Bernoulli %d%%", static_cast<int>(percent(p.bernoulli)));
+			snprintf(out, size, oled ? "Bernoulli %d%%" : "n%d", static_cast<int>(percent(p.bernoulli)));
 		}
 		else {
-			snprintf(out, size, "Gate 4 every %d", static_cast<int>(p.gateDivision));
+			snprintf(out, size, oled ? "Gate 4 every %d" : "g%d", static_cast<int>(p.gateDivision));
 		}
 		break;
 	}
@@ -305,7 +335,7 @@ ActionResult MarblesView::horizontalEncoderAction(int32_t offset) {
 	auto& e = runner::engine();
 	e.setDejaVu(e.params().dejaVu + 0.01f * offset);
 	char text[24];
-	snprintf(text, sizeof(text), display->haveOLED() ? "Deja vu %d%%" : "DV%d", static_cast<int>(percent(e.params().dejaVu)));
+	snprintf(text, sizeof(text), display->haveOLED() ? "Deja vu %d%%" : "v%d", static_cast<int>(percent(e.params().dejaVu)));
 	showValuePopup(text);
 	refreshOLED();
 	return ActionResult::DEALT_WITH;
@@ -384,7 +414,8 @@ void MarblesView::modEncoderAction(int32_t whichModEncoder, int32_t offset) {
 
 void MarblesView::selectEncoderAction(int8_t offset) {
 	if (Buttons::isShiftButtonPressed()) {
-		bool tempo = !runner::isTempoSync();
+		// clockwise is tempo sync, anticlockwise is free time, so extra clicks cannot flip it back
+		bool tempo = offset > 0;
 		runner::setTempoSync(tempo);
 		showNamePopup(tempo ? (display->haveOLED() ? "Tempo sync" : "SYNC") : (display->haveOLED() ? "Free time" : "FREE"));
 		refreshOLED();
@@ -392,7 +423,7 @@ void MarblesView::selectEncoderAction(int8_t offset) {
 	}
 	page_ = (page_ + (offset > 0 ? 1 : kNumPages - 1)) % kNumPages;
 	char text[32];
-	snprintf(text, sizeof(text), display->haveOLED() ? "Page: %s" : "%s", kPageNames[page_]);
+	snprintf(text, sizeof(text), "%s", display->haveOLED() ? kPageNames[page_] : kPageNamesShort[page_]);
 	showNamePopup(text);
 	refreshOLED();
 }
@@ -450,7 +481,7 @@ ActionResult MarblesView::padAction(int32_t x, int32_t y, int32_t velocity) {
 		int32_t lit = static_cast<int32_t>(e.params().dejaVu * kDisplayHeight + 0.5f);
 		e.setDejaVu((lit == y + 1) ? 0.0f : static_cast<float>(y + 1) / kDisplayHeight);
 		char text[24];
-		snprintf(text, sizeof(text), display->haveOLED() ? "Deja vu %d%%" : "DV%d", static_cast<int>(percent(e.params().dejaVu)));
+		snprintf(text, sizeof(text), display->haveOLED() ? "Deja vu %d%%" : "v%d", static_cast<int>(percent(e.params().dejaVu)));
 		showValuePopup(text);
 		refreshOLED();
 		return ActionResult::DEALT_WITH;
