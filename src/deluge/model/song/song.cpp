@@ -67,6 +67,7 @@
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/crossmod_runner.h"
+#include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
@@ -1482,6 +1483,29 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("kuramoto");
 	}
 
+	// Bouncing balls (only when they own an output)
+	if (deluge::billiards::runner::isActive()) {
+		auto billiards = deluge::billiards::runner::getSettings();
+		const auto& bp = billiards.params;
+		writer.writeOpeningTag("billiards");
+		writer.writeTag("cv", billiards.cvMask);
+		writer.writeTag("gates", billiards.gateMask);
+		writer.writeTag("balls", bp.numBalls);
+		writer.writeTag("speed", static_cast<int32_t>(bp.speed * 100.0f + 0.5f));
+		writer.writeTag("gravity", static_cast<int32_t>(bp.gravity * 100.0f + 0.5f));
+		writer.writeTag("bounce", static_cast<int32_t>(bp.bounce * 1000.0f + 0.5f));
+		writer.writeTag("cvBall", bp.cvBall);
+		writer.writeTag("gateMode", bp.gateMode == deluge::billiards::GateMode::BALLS ? 1 : 0);
+		writer.writeTag("range", static_cast<int32_t>(bp.rangeVolts * 100.0f + 0.5f));
+		writer.writeTag("tempoSync", bp.timeMode == deluge::marbles::TimeMode::TEMPO ? 1 : 0);
+		for (int32_t y = 0; y < deluge::billiards::kHeight; y++) {
+			char name[8];
+			snprintf(name, sizeof(name), "row%d", static_cast<int>(y));
+			writer.writeTag(name, static_cast<int32_t>(bp.bumpers[y]));
+		}
+		writer.writeClosingTag("billiards");
+	}
+
 	// Cross-modulation routes (only when any are set)
 	if (deluge::crossmod::runner::isUsed()) {
 		auto cm = deluge::crossmod::runner::getSettings();
@@ -1639,6 +1663,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::rungler::runner::resetToDefaults();
 	deluge::neurons::runner::resetToDefaults();
 	deluge::kuramoto::runner::resetToDefaults();
+	deluge::billiards::runner::resetToDefaults();
 	deluge::crossmod::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
@@ -2261,6 +2286,52 @@ unknownTag:
 				}
 				reader.exitTag("kuramoto", true);
 				deluge::kuramoto::runner::loadSettings(kuramoto);
+			}
+
+			else if (!strcmp(tagName, "billiards")) {
+				deluge::billiards::runner::Settings billiards;
+				auto& bp = billiards.params;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "cv")) {
+						billiards.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						billiards.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "balls")) {
+						bp.numBalls = reader.readTagOrAttributeValueInt();
+					}
+					else if (!strcmp(tagName, "speed")) {
+						bp.speed = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "gravity")) {
+						bp.gravity = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "bounce")) {
+						bp.bounce = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "cvBall")) {
+						bp.cvBall = reader.readTagOrAttributeValueInt();
+					}
+					else if (!strcmp(tagName, "gateMode")) {
+						bp.gateMode = reader.readTagOrAttributeValueInt() ? deluge::billiards::GateMode::BALLS
+						                                                  : deluge::billiards::GateMode::WALLS;
+					}
+					else if (!strcmp(tagName, "range")) {
+						bp.rangeVolts = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						bp.timeMode = reader.readTagOrAttributeValueInt() ? deluge::marbles::TimeMode::TEMPO
+						                                                  : deluge::marbles::TimeMode::FREE;
+					}
+					else if (strlen(tagName) == 4 && !strncmp(tagName, "row", 3) && tagName[3] >= '0' && tagName[3] <= '7') {
+						bp.bumpers[tagName[3] - '0'] = static_cast<uint16_t>(reader.readTagOrAttributeValueInt());
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("billiards", true);
+				deluge::billiards::runner::loadSettings(billiards);
 			}
 
 			else if (!strcmp(tagName, "crossmod")) {

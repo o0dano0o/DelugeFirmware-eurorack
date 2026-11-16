@@ -23,6 +23,7 @@
 #include "model/song/song.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -466,6 +467,7 @@ void CVEngine::playbackBegun() {
 	deluge::rungler::runner::playbackBegun();
 	deluge::neurons::runner::playbackBegun();
 	deluge::kuramoto::runner::playbackBegun();
+	deluge::billiards::runner::playbackBegun();
 	deluge::euclid::evolver::playbackBegun();
 	clockState = false;
 	updateRunOutput();

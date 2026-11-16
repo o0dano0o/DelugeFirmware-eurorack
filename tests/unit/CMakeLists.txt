@@ -67,6 +67,7 @@ file(GLOB_RECURSE deluge_SOURCES
         ../../src/deluge/processing/engines/marbles_engine.cpp
         ../../src/deluge/processing/engines/rungler_engine.cpp
         ../../src/deluge/processing/engines/neurons_engine.cpp
+        ../../src/deluge/processing/engines/billiards_engine.cpp
         ../../src/deluge/processing/engines/kuramoto_engine.cpp
         ../../src/deluge/processing/engines/crossmod_engine.cpp
         # For output ownership tests
@@ -97,6 +98,7 @@ add_executable(UnitTests
         marbles_engine_tests.cpp
         rungler_engine_tests.cpp
         neurons_engine_tests.cpp
+        billiards_engine_tests.cpp
         kuramoto_engine_tests.cpp
         crossmod_engine_tests.cpp
         pitch_tracker_tests.cpp

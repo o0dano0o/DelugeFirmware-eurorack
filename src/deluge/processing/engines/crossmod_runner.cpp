@@ -20,6 +20,7 @@
 #include "processing/engines/chaos_engine.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -68,6 +69,7 @@ const Info kSources[kNumSources] = {
     {"Neuron 2", "n-2", 3},    {"Neuron 3", "n-3", 3},    {"Neuron 4", "n-4", 3},    {"Neurons average", "n-A", 3},
     {"Turing note", "tn", 4},     {"Euclid any hit", "EAny", 5}, {"Euclid gate 1 hits", "E-1", 5}, {"Euclid gate 2 hits", "E-2", 5},
     {"Kuramoto order", "Ko", 6},  {"Kuramoto mean phase", "KPh", 6},
+    {"Ball x", "bLx", 7},         {"Ball y", "bLy", 7},
 };
 
 const Info kTargets[kNumTargets] = {
@@ -77,6 +79,7 @@ const Info kTargets[kNumTargets] = {
     {"Turing flip chance", "tFP", 4}, {"Neurons noise", "nNo", 3},     {"Neurons leak", "nLk", 3},
     {"Chaos coupling", "CCp", 0}, {"Euclid chaos depth", "EdEP", 5},
     {"Kuramoto coupling", "KCp", 6}, {"Kuramoto noise", "KNo", 6},
+    {"Ball speed", "bSP", 7},     {"Gravity", "bGr", 7},       {"Bounce", "bBn", 7},
 };
 
 } // namespace
@@ -115,6 +118,8 @@ bool familyRunning(int32_t family) {
 		return deluge::turing::runner::isActive();
 	case 6:
 		return deluge::kuramoto::runner::isActive();
+	case 7:
+		return deluge::billiards::runner::isActive();
 	default:
 		return true; // Euclid is always there
 	}
@@ -173,8 +178,16 @@ float sourceValue(int32_t s) {
 		return hitLevel(s - 14);
 	case 16:
 		return clamp01(deluge::kuramoto::runner::engine().getOrder());
-	default:
+	case 17:
 		return clamp01(deluge::kuramoto::runner::engine().getMeanPhase());
+	case 18:
+	case 19: {
+		auto& e = deluge::billiards::runner::engine();
+		int32_t b = e.params().cvBall < e.params().numBalls ? e.params().cvBall : 0;
+		return s == 18 ? clamp01(e.getX(b) / deluge::billiards::kWidth) : clamp01(e.getY(b) / deluge::billiards::kHeight);
+	}
+	default:
+		return 0.5f;
 	}
 }
 
@@ -210,6 +223,12 @@ float readTarget(int32_t t) {
 		return deluge::kuramoto::runner::engine().params().coupling;
 	case 15:
 		return deluge::kuramoto::runner::engine().params().noise;
+	case 16:
+		return clamp01((deluge::billiards::runner::engine().params().speed - 0.5f) / 29.5f);
+	case 17:
+		return clamp01(deluge::billiards::runner::engine().params().gravity / 30.0f);
+	case 18:
+		return clamp01((deluge::billiards::runner::engine().params().bounce - 0.3f) / 0.7f);
 	case 12:
 		return deluge::chaos::runner::engine().getCoupling() / kChaosCouplingMax;
 	default:
@@ -261,6 +280,15 @@ void writeTarget(int32_t t, float v) {
 		break;
 	case 15:
 		deluge::kuramoto::runner::engine().setNoise(v);
+		break;
+	case 16:
+		deluge::billiards::runner::engine().setSpeed(0.5f + v * 29.5f);
+		break;
+	case 17:
+		deluge::billiards::runner::engine().setGravity(v * 30.0f);
+		break;
+	case 18:
+		deluge::billiards::runner::engine().setBounce(0.3f + v * 0.7f);
 		break;
 	case 12:
 		deluge::chaos::runner::engine().setCoupling(v * kChaosCouplingMax);
