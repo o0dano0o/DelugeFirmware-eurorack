@@ -333,6 +333,39 @@ ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	if (x >= kNumOwners) {
 		return ActionResult::DEALT_WITH;
 	}
+	// SHIFT + an owner pad opens that generator's view without giving it anything
+	if (Buttons::isShiftButtonPressed() && x != EUCLID && outputForRow(y) >= 0) {
+		if (!getCurrentClip()) {
+			showNotice("Open a clip first");
+			return ActionResult::DEALT_WITH;
+		}
+		UI* target = nullptr;
+		switch (static_cast<Owner>(x)) {
+		case CHAOS:
+			target = &chaosView;
+			break;
+		case TURING:
+			target = &turingView;
+			break;
+		case VOICE:
+			target = &voiceView;
+			break;
+		case MARBLES:
+			target = &marblesView;
+			break;
+		case RUNGLER:
+			target = &runglerView;
+			break;
+		default:
+			break;
+		}
+		if (target) {
+			display->cancelPopup();
+			openedFromHere_ = true;
+			changeRootUI(target);
+		}
+		return ActionResult::DEALT_WITH;
+	}
 	int32_t output = outputForRow(y);
 	if (output < 0 || !canOwn(output, static_cast<Owner>(x))) {
 		return ActionResult::DEALT_WITH;
