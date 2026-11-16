@@ -221,6 +221,7 @@ enum class UIType : uint8_t {
 	CROSSMOD,
 	KURAMOTO,
 	BILLIARDS,
+	SANDPILE,
 	// Keep these at the bottom!
 	UI_TYPE_COUNT,
 	NONE = 255,

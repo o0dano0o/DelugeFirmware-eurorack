@@ -64,6 +64,7 @@
 #include "processing/engines/crossmod_runner.h"
 #include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
+#include "processing/engines/sandpile_runner.h"
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -605,6 +606,7 @@ void registerTasks() {
 	// Coupled phase oscillators (does nothing unless it owns an output)
 	addRepeatingTask([]() { deluge::kuramoto::runner::tick(); }, p++, 0.001, 0.003, 0.01, "kuramoto", RESOURCE_NONE);
 	addRepeatingTask([]() { deluge::billiards::runner::tick(); }, p++, 0.001, 0.003, 0.01, "billiards", RESOURCE_NONE);
+	addRepeatingTask([]() { deluge::sandpile::runner::tick(); }, p++, 0.001, 0.003, 0.01, "sandpile", RESOURCE_NONE);
 	// Cross-modulation between generators (does nothing unless routes are set)
 	addRepeatingTask([]() { deluge::crossmod::runner::tick(); }, p++, 0.002, 0.005, 0.01, "crossmod", RESOURCE_NONE);
 	// Euclidean tracks changing each other over time

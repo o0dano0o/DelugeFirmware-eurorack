@@ -28,6 +28,7 @@
 #include "gui/views/billiards_view.h"
 #include "gui/views/kuramoto_view.h"
 #include "gui/views/marbles_view.h"
+#include "gui/views/sandpile_view.h"
 #include "gui/views/neurons_view.h"
 #include "gui/views/rungler_view.h"
 #include "gui/views/turing_view.h"
@@ -46,6 +47,7 @@
 #include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/sandpile_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
 #include "processing/engines/turing_runner.h"
@@ -61,7 +63,7 @@ EurorackView eurorackView{};
 
 namespace {
 
-enum Owner : uint8_t { EUCLID, CHAOS, TURING, VOICE, MARBLES, RUNGLER, NEURONS, KURAMOTO, BILLIARDS, SYSTEM, kNumOwners = SYSTEM };
+enum Owner : uint8_t { EUCLID, CHAOS, TURING, VOICE, MARBLES, RUNGLER, NEURONS, KURAMOTO, BILLIARDS, SANDPILE, SYSTEM, kNumOwners = SYSTEM };
 
 constexpr int32_t kNumGates = 4;
 constexpr int32_t kNumCVs = 2;
@@ -70,10 +72,10 @@ constexpr int32_t kMeterStart = kNumOwners + 1;
 constexpr int32_t kMeterWidth = kDisplayWidth - kMeterStart;
 constexpr int32_t kHoldMs = 120;
 
-const RGB kOwnerColour[kNumOwners] = {RGB{230, 230, 230}, RGB{200, 40, 255}, RGB{30, 220, 40}, RGB{255, 40, 110}, RGB{40, 160, 255}, RGB{255, 140, 40}, RGB{40, 220, 200}, RGB{240, 230, 50}, RGB{255, 120, 120}};
+const RGB kOwnerColour[kNumOwners] = {RGB{230, 230, 230}, RGB{200, 40, 255}, RGB{30, 220, 40}, RGB{255, 40, 110}, RGB{40, 160, 255}, RGB{255, 140, 40}, RGB{40, 220, 200}, RGB{240, 230, 50}, RGB{255, 120, 120}, RGB{225, 185, 105}};
 const RGB kSystemColour{60, 60, 60};
 
-char const* const kOwnerNames[kNumOwners] = {"Euclid", "Chaos", "Turing", "Voice", "Marbles", "Rungler", "Neurons", "Kuramoto", "Billiards"};
+char const* const kOwnerNames[kNumOwners] = {"Euclid", "Chaos", "Turing", "Voice", "Marbles", "Rungler", "Neurons", "Kuramoto", "Billiards", "Sandpile"};
 
 /// Output index 0-3 are gates 1-4, 4-5 are CV 1-2
 /// Rows from the top: gate 1, CV 1, gap, gate 2, CV 2, gap, gate 3, gate 4 (-1 is a gap)
@@ -119,6 +121,8 @@ Owner ownerOf(int32_t output) {
 		return KURAMOTO;
 	case deluge::owners::Owner::BILLIARDS:
 		return BILLIARDS;
+	case deluge::owners::Owner::SANDPILE:
+		return SANDPILE;
 	default:
 		return EUCLID;
 	}
@@ -378,6 +382,9 @@ ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 		case BILLIARDS:
 			target = &billiardsView;
 			break;
+		case SANDPILE:
+			target = &sandpileView;
+			break;
 		default:
 			break;
 		}
@@ -415,6 +422,14 @@ ActionResult EurorackView::padAction(int32_t x, int32_t y, int32_t velocity) {
 			break;
 		case VOICE:
 			deluge::voice::runner::setChannel(channel);
+			break;
+		case SANDPILE:
+			if (isGate(output)) {
+				deluge::sandpile::runner::setGateSandpile(channel, true);
+			}
+			else {
+				deluge::sandpile::runner::setCVSandpile(channel, true);
+			}
 			break;
 		case BILLIARDS:
 			if (isGate(output)) {
@@ -583,6 +598,9 @@ ActionResult EurorackView::openOwnerOfRow(int32_t y) {
 		break;
 	case BILLIARDS:
 		target = &billiardsView;
+		break;
+	case SANDPILE:
+		target = &sandpileView;
 		break;
 	case CHAOS:
 		target = &chaosView;

@@ -69,6 +69,7 @@
 #include "processing/engines/crossmod_runner.h"
 #include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
+#include "processing/engines/sandpile_runner.h"
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -1506,6 +1507,22 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("billiards");
 	}
 
+	// Sandpile (only when it owns an output)
+	if (deluge::sandpile::runner::isActive()) {
+		auto sandpile = deluge::sandpile::runner::getSettings();
+		const auto& sp = sandpile.params;
+		writer.writeOpeningTag("sandpile");
+		writer.writeTag("cv", sandpile.cvMask);
+		writer.writeTag("gates", sandpile.gateMask);
+		writer.writeTag("rate", static_cast<int32_t>(sp.dropRate * 100.0f + 0.5f));
+		writer.writeTag("dropMode", sp.dropMode == deluge::sandpile::DropMode::CENTRE ? 1 : 0);
+		writer.writeTag("big", sp.bigSize);
+		writer.writeTag("topple", static_cast<int32_t>(sp.toppleRate * 10.0f + 0.5f));
+		writer.writeTag("range", static_cast<int32_t>(sp.rangeVolts * 100.0f + 0.5f));
+		writer.writeTag("tempoSync", sp.timeMode == deluge::marbles::TimeMode::TEMPO ? 1 : 0);
+		writer.writeClosingTag("sandpile");
+	}
+
 	// Cross-modulation routes (only when any are set)
 	if (deluge::crossmod::runner::isUsed()) {
 		auto cm = deluge::crossmod::runner::getSettings();
@@ -1664,6 +1681,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::neurons::runner::resetToDefaults();
 	deluge::kuramoto::runner::resetToDefaults();
 	deluge::billiards::runner::resetToDefaults();
+	deluge::sandpile::runner::resetToDefaults();
 	deluge::crossmod::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
@@ -2332,6 +2350,43 @@ unknownTag:
 				}
 				reader.exitTag("billiards", true);
 				deluge::billiards::runner::loadSettings(billiards);
+			}
+
+			else if (!strcmp(tagName, "sandpile")) {
+				deluge::sandpile::runner::Settings sandpile;
+				auto& sp = sandpile.params;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "cv")) {
+						sandpile.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						sandpile.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "rate")) {
+						sp.dropRate = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "dropMode")) {
+						sp.dropMode = reader.readTagOrAttributeValueInt() ? deluge::sandpile::DropMode::CENTRE
+						                                                  : deluge::sandpile::DropMode::RANDOM;
+					}
+					else if (!strcmp(tagName, "big")) {
+						sp.bigSize = reader.readTagOrAttributeValueInt();
+					}
+					else if (!strcmp(tagName, "topple")) {
+						sp.toppleRate = reader.readTagOrAttributeValueInt() / 10.0f;
+					}
+					else if (!strcmp(tagName, "range")) {
+						sp.rangeVolts = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						sp.timeMode = reader.readTagOrAttributeValueInt() ? deluge::marbles::TimeMode::TEMPO
+						                                                  : deluge::marbles::TimeMode::FREE;
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("sandpile", true);
+				deluge::sandpile::runner::loadSettings(sandpile);
 			}
 
 			else if (!strcmp(tagName, "crossmod")) {

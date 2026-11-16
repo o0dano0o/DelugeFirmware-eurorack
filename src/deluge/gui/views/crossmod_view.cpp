@@ -51,7 +51,7 @@ constexpr int32_t kPopupMs = 800;
 constexpr int32_t kTopRow = kDisplayHeight - 1; ///< route 1's source row
 constexpr int32_t kTargetTopRow = kNumRoutes - 1; ///< route 1's target row
 
-const RGB kFamilyColour[8] = {
+const RGB kFamilyColour[9] = {
     RGB{180, 60, 255}, // chaos
     RGB{40, 160, 255}, // Marbles
     RGB{255, 140, 40}, // Rungler
@@ -60,6 +60,7 @@ const RGB kFamilyColour[8] = {
     RGB{200, 200, 200}, // Euclid
     RGB{240, 230, 50},  // Kuramoto
     RGB{255, 120, 120}, // Billiards
+    RGB{225, 185, 105}, // Sandpile
 };
 const RGB kAdd{40, 220, 70};
 const RGB kSubtract{255, 50, 50};

@@ -22,10 +22,12 @@
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/billiards_runner.h"
 #include "processing/engines/kuramoto_runner.h"
+#include "processing/engines/sandpile_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
 #include "processing/engines/turing_runner.h"
 #include <algorithm>
+#include <cmath>
 
 namespace deluge::crossmod::runner {
 
@@ -70,6 +72,7 @@ const Info kSources[kNumSources] = {
     {"Turing note", "tn", 4},     {"Euclid any hit", "EAny", 5}, {"Euclid gate 1 hits", "E-1", 5}, {"Euclid gate 2 hits", "E-2", 5},
     {"Kuramoto order", "Ko", 6},  {"Kuramoto mean phase", "KPh", 6},
     {"Ball x", "bLx", 7},         {"Ball y", "bLy", 7},
+    {"Sand avalanche size", "SAS", 8}, {"Sand fill", "SFl", 8},
 };
 
 const Info kTargets[kNumTargets] = {
@@ -80,6 +83,7 @@ const Info kTargets[kNumTargets] = {
     {"Chaos coupling", "CCp", 0}, {"Euclid chaos depth", "EdEP", 5},
     {"Kuramoto coupling", "KCp", 6}, {"Kuramoto noise", "KNo", 6},
     {"Ball speed", "bSP", 7},     {"Gravity", "bGr", 7},       {"Bounce", "bBn", 7},
+    {"Sand drop rate", "SdR", 8},
 };
 
 } // namespace
@@ -120,6 +124,8 @@ bool familyRunning(int32_t family) {
 		return deluge::kuramoto::runner::isActive();
 	case 7:
 		return deluge::billiards::runner::isActive();
+	case 8:
+		return deluge::sandpile::runner::isActive();
 	default:
 		return true; // Euclid is always there
 	}
@@ -186,6 +192,10 @@ float sourceValue(int32_t s) {
 		int32_t b = e.params().cvBall < e.params().numBalls ? e.params().cvBall : 0;
 		return s == 18 ? clamp01(e.getX(b) / deluge::billiards::kWidth) : clamp01(e.getY(b) / deluge::billiards::kHeight);
 	}
+	case 20:
+		return clamp01(deluge::sandpile::runner::engine().getVolts(0) / deluge::sandpile::runner::engine().params().rangeVolts);
+	case 21:
+		return clamp01(deluge::sandpile::runner::engine().getVolts(1) / deluge::sandpile::runner::engine().params().rangeVolts);
 	default:
 		return 0.5f;
 	}
@@ -229,6 +239,8 @@ float readTarget(int32_t t) {
 		return clamp01(deluge::billiards::runner::engine().params().gravity / 30.0f);
 	case 18:
 		return clamp01((deluge::billiards::runner::engine().params().bounce - 0.3f) / 0.7f);
+	case 19:
+		return clamp01(std::log(deluge::sandpile::runner::engine().params().dropRate / 0.25f) / std::log(80.0f));
 	case 12:
 		return deluge::chaos::runner::engine().getCoupling() / kChaosCouplingMax;
 	default:
@@ -289,6 +301,9 @@ void writeTarget(int32_t t, float v) {
 		break;
 	case 18:
 		deluge::billiards::runner::engine().setBounce(0.3f + v * 0.7f);
+		break;
+	case 19:
+		deluge::sandpile::runner::engine().setDropRate(0.25f * std::pow(80.0f, v));
 		break;
 	case 12:
 		deluge::chaos::runner::engine().setCoupling(v * kChaosCouplingMax);
