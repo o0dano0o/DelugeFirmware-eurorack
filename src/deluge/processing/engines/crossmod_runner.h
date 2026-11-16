@@ -24,8 +24,8 @@
 /// settings that routes point at. Sources and targets are listed here, in one place.
 namespace deluge::crossmod::runner {
 
-constexpr int32_t kNumSources = 16;
-constexpr int32_t kNumTargets = 14;
+constexpr int32_t kNumSources = 18;
+constexpr int32_t kNumTargets = 16;
 
 /// Full names for the OLED, and four-character tags for the 7-segment display
 char const* sourceName(int32_t source);

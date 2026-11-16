@@ -62,6 +62,7 @@
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/crossmod_runner.h"
+#include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -600,6 +601,8 @@ void registerTasks() {
 	addRepeatingTask([]() { deluge::rungler::runner::tick(); }, p++, 0.001, 0.003, 0.01, "rungler", RESOURCE_NONE);
 	// Neuron network (does nothing unless it owns an output)
 	addRepeatingTask([]() { deluge::neurons::runner::tick(); }, p++, 0.001, 0.003, 0.01, "neurons", RESOURCE_NONE);
+	// Coupled phase oscillators (does nothing unless it owns an output)
+	addRepeatingTask([]() { deluge::kuramoto::runner::tick(); }, p++, 0.001, 0.003, 0.01, "kuramoto", RESOURCE_NONE);
 	// Cross-modulation between generators (does nothing unless routes are set)
 	addRepeatingTask([]() { deluge::crossmod::runner::tick(); }, p++, 0.002, 0.005, 0.01, "crossmod", RESOURCE_NONE);
 	// Euclidean tracks changing each other over time

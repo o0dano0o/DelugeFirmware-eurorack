@@ -51,13 +51,14 @@ constexpr int32_t kPopupMs = 800;
 constexpr int32_t kTopRow = kDisplayHeight - 1; ///< route 1's source row
 constexpr int32_t kTargetTopRow = kNumRoutes - 1; ///< route 1's target row
 
-const RGB kFamilyColour[6] = {
+const RGB kFamilyColour[7] = {
     RGB{180, 60, 255}, // chaos
     RGB{40, 160, 255}, // Marbles
     RGB{255, 140, 40}, // Rungler
     RGB{40, 220, 200}, // Neurons
     RGB{40, 220, 70},  // Turing
     RGB{200, 200, 200}, // Euclid
+    RGB{240, 230, 50},  // Kuramoto
 };
 const RGB kAdd{40, 220, 70};
 const RGB kSubtract{255, 50, 50};
@@ -145,7 +146,7 @@ bool CrossmodView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth 
 
 		int32_t sourceY = kTopRow - i;
 		if (whichRows & (1 << sourceY)) {
-			for (int32_t x = 0; x < runner::kNumSources; x++) {
+			for (int32_t x = 0; x < std::min<int32_t>(runner::kNumSources, kDisplayWidth); x++) {
 				RGB c = scaled(kFamilyColour[runner::sourceFamily(x)], dimPercent);
 				if (x == r.source) {
 					int32_t live = static_cast<int32_t>(30.0f + 70.0f * clamp01(runner::sourceValue(x)));
@@ -156,7 +157,7 @@ bool CrossmodView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth 
 		}
 		int32_t targetY = kTargetTopRow - i;
 		if (whichRows & (1 << targetY)) {
-			for (int32_t x = 0; x < runner::kNumTargets; x++) {
+			for (int32_t x = 0; x < std::min<int32_t>(runner::kNumTargets, kDisplayWidth); x++) {
 				RGB c = scaled(kFamilyColour[runner::targetFamily(x)], dimPercent);
 				if (x == r.target) {
 					c = scaled(kFamilyColour[runner::targetFamily(x)], selected ? 100 : 50);
@@ -410,7 +411,7 @@ ActionResult CrossmodView::padAction(int32_t x, int32_t y, int32_t velocity) {
 
 	if (y >= kDisplayHeight - kNumRoutes) {
 		int32_t i = kTopRow - y;
-		if (x < runner::kNumSources) {
+		if (x < std::min<int32_t>(runner::kNumSources, kDisplayWidth)) {
 			route_ = i;
 			e.setSource(i, e.route(i).source == x ? -1 : x);
 			showSource();
@@ -419,7 +420,7 @@ ActionResult CrossmodView::padAction(int32_t x, int32_t y, int32_t velocity) {
 	}
 	else if (y < kNumRoutes) {
 		int32_t i = kTargetTopRow - y;
-		if (x < runner::kNumTargets) {
+		if (x < std::min<int32_t>(runner::kNumTargets, kDisplayWidth)) {
 			route_ = i;
 			e.setTarget(i, e.route(i).target == x ? -1 : x);
 			showTarget();

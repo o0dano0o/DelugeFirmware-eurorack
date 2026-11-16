@@ -67,6 +67,7 @@
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/crossmod_runner.h"
+#include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -1462,6 +1463,25 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("marbles");
 	}
 
+	// Coupled oscillators (only when they own an output)
+	if (deluge::kuramoto::runner::isActive()) {
+		auto kuramoto = deluge::kuramoto::runner::getSettings();
+		const auto& kp = kuramoto.params;
+		writer.writeOpeningTag("kuramoto");
+		writer.writeTag("cv", kuramoto.cvMask);
+		writer.writeTag("gates", kuramoto.gateMask);
+		writer.writeTag("coupling", static_cast<int32_t>(kp.coupling * 1000.0f + 0.5f));
+		writer.writeTag("noise", static_cast<int32_t>(kp.noise * 1000.0f + 0.5f));
+		writer.writeTag("range", static_cast<int32_t>(kp.rangeVolts * 100.0f + 0.5f));
+		writer.writeTag("tempoSync", kp.timeMode == deluge::marbles::TimeMode::TEMPO ? 1 : 0);
+		for (int32_t i = 0; i < deluge::kuramoto::kNumOscillators; i++) {
+			char name[8];
+			snprintf(name, sizeof(name), "rate%d", static_cast<int>(i + 1));
+			writer.writeTag(name, static_cast<int32_t>(kp.rate[i] * 100.0f + 0.5f));
+		}
+		writer.writeClosingTag("kuramoto");
+	}
+
 	// Cross-modulation routes (only when any are set)
 	if (deluge::crossmod::runner::isUsed()) {
 		auto cm = deluge::crossmod::runner::getSettings();
@@ -1618,6 +1638,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::marbles::runner::resetToDefaults();
 	deluge::rungler::runner::resetToDefaults();
 	deluge::neurons::runner::resetToDefaults();
+	deluge::kuramoto::runner::resetToDefaults();
 	deluge::crossmod::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
@@ -2207,6 +2228,39 @@ unknownTag:
 				}
 				reader.exitTag("marbles", true);
 				deluge::marbles::runner::loadSettings(marbles);
+			}
+
+			else if (!strcmp(tagName, "kuramoto")) {
+				deluge::kuramoto::runner::Settings kuramoto;
+				auto& kp = kuramoto.params;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (!strcmp(tagName, "cv")) {
+						kuramoto.cvMask = reader.readTagOrAttributeValueInt() & 0x3;
+					}
+					else if (!strcmp(tagName, "gates")) {
+						kuramoto.gateMask = reader.readTagOrAttributeValueInt() & 0xF;
+					}
+					else if (!strcmp(tagName, "coupling")) {
+						kp.coupling = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "noise")) {
+						kp.noise = reader.readTagOrAttributeValueInt() / 1000.0f;
+					}
+					else if (!strcmp(tagName, "range")) {
+						kp.rangeVolts = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					else if (!strcmp(tagName, "tempoSync")) {
+						kp.timeMode = reader.readTagOrAttributeValueInt() ? deluge::marbles::TimeMode::TEMPO
+						                                                  : deluge::marbles::TimeMode::FREE;
+					}
+					else if (strlen(tagName) == 5 && !strncmp(tagName, "rate", 4) && tagName[4] >= '1' && tagName[4] <= '4') {
+						kp.rate[tagName[4] - '1'] = reader.readTagOrAttributeValueInt() / 100.0f;
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("kuramoto", true);
+				deluge::kuramoto::runner::loadSettings(kuramoto);
 			}
 
 			else if (!strcmp(tagName, "crossmod")) {

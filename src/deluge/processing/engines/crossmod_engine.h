@@ -32,7 +32,7 @@
 namespace deluge::crossmod {
 
 constexpr int32_t kNumRoutes = 4;
-constexpr int32_t kMaxSources = 16;
+constexpr int32_t kMaxSources = 20;
 constexpr int32_t kMaxTargets = 16;
 constexpr int32_t kMaxDepthSteps = 20; ///< depth is stored in steps of 0.05, -20 to 20 (-1 to 1)
 

@@ -20,6 +20,7 @@
 #include "processing/engines/chaos_engine.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/marbles_runner.h"
+#include "processing/engines/kuramoto_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
 #include "processing/engines/turing_runner.h"
@@ -66,6 +67,7 @@ const Info kSources[kNumSources] = {
     {"Marbles X2", "M-2", 1},  {"Rungler CV 1", "r-1", 2}, {"Rungler CV 2", "r-2", 2}, {"Neuron 1", "n-1", 3},
     {"Neuron 2", "n-2", 3},    {"Neuron 3", "n-3", 3},    {"Neuron 4", "n-4", 3},    {"Neurons average", "n-A", 3},
     {"Turing note", "tn", 4},     {"Euclid any hit", "EAny", 5}, {"Euclid gate 1 hits", "E-1", 5}, {"Euclid gate 2 hits", "E-2", 5},
+    {"Kuramoto order", "Ko", 6},  {"Kuramoto mean phase", "KPh", 6},
 };
 
 const Info kTargets[kNumTargets] = {
@@ -74,6 +76,7 @@ const Info kTargets[kNumTargets] = {
     {"Rungler chance", "rCh", 2},     {"Rungler mod", "rMd", 2},       {"Rungler slew", "rSl", 2},
     {"Turing flip chance", "tFP", 4}, {"Neurons noise", "nNo", 3},     {"Neurons leak", "nLk", 3},
     {"Chaos coupling", "CCp", 0}, {"Euclid chaos depth", "EdEP", 5},
+    {"Kuramoto coupling", "KCp", 6}, {"Kuramoto noise", "KNo", 6},
 };
 
 } // namespace
@@ -110,6 +113,8 @@ bool familyRunning(int32_t family) {
 		return deluge::neurons::runner::isActive();
 	case 4:
 		return deluge::turing::runner::isActive();
+	case 6:
+		return deluge::kuramoto::runner::isActive();
 	default:
 		return true; // Euclid is always there
 	}
@@ -163,8 +168,13 @@ float sourceValue(int32_t s) {
 		}
 		return best;
 	}
-	default:
+	case 14:
+	case 15:
 		return hitLevel(s - 14);
+	case 16:
+		return clamp01(deluge::kuramoto::runner::engine().getOrder());
+	default:
+		return clamp01(deluge::kuramoto::runner::engine().getMeanPhase());
 	}
 }
 
@@ -196,6 +206,10 @@ float readTarget(int32_t t) {
 		return deluge::neurons::runner::engine().params().noise;
 	case 11:
 		return deluge::neurons::runner::engine().params().leak;
+	case 14:
+		return deluge::kuramoto::runner::engine().params().coupling;
+	case 15:
+		return deluge::kuramoto::runner::engine().params().noise;
 	case 12:
 		return deluge::chaos::runner::engine().getCoupling() / kChaosCouplingMax;
 	default:
@@ -241,6 +255,12 @@ void writeTarget(int32_t t, float v) {
 		break;
 	case 11:
 		deluge::neurons::runner::engine().setLeak(v);
+		break;
+	case 14:
+		deluge::kuramoto::runner::engine().setCoupling(v);
+		break;
+	case 15:
+		deluge::kuramoto::runner::engine().setNoise(v);
 		break;
 	case 12:
 		deluge::chaos::runner::engine().setCoupling(v * kChaosCouplingMax);
