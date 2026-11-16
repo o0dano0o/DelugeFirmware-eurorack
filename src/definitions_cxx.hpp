@@ -218,6 +218,7 @@ enum class UIType : uint8_t {
 	MARBLES,
 	RUNGLER,
 	NEURONS,
+	CROSSMOD,
 	// Keep these at the bottom!
 	UI_TYPE_COUNT,
 	NONE = 255,

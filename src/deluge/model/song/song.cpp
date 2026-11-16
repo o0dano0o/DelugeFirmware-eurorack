@@ -66,6 +66,7 @@
 #include <cstring>
 #include <hid/buttons.h>
 #include "processing/engines/chaos_runner.h"
+#include "processing/engines/crossmod_runner.h"
 #include "processing/engines/marbles_runner.h"
 #include "processing/engines/neurons_runner.h"
 #include "processing/engines/rungler_runner.h"
@@ -1461,6 +1462,22 @@ weAreInArrangementEditorOrInClipInstance:
 		writer.writeClosingTag("marbles");
 	}
 
+	// Cross-modulation routes (only when any are set)
+	if (deluge::crossmod::runner::isUsed()) {
+		auto cm = deluge::crossmod::runner::getSettings();
+		writer.writeOpeningTag("crossmod");
+		for (int32_t i = 0; i < deluge::crossmod::kNumRoutes; i++) {
+			char name[8];
+			snprintf(name, sizeof(name), "src%d", static_cast<int>(i));
+			writer.writeTag(name, cm.routes[i].source + 1); // 0 means none
+			snprintf(name, sizeof(name), "tgt%d", static_cast<int>(i));
+			writer.writeTag(name, cm.routes[i].target + 1);
+			snprintf(name, sizeof(name), "dep%d", static_cast<int>(i));
+			writer.writeTag(name, cm.routes[i].depth + deluge::crossmod::kMaxDepthSteps); // saved as 0 to 40
+		}
+		writer.writeClosingTag("crossmod");
+	}
+
 	// Neuron network (only when it owns an output)
 	if (deluge::neurons::runner::isActive()) {
 		auto neurons = deluge::neurons::runner::getSettings();
@@ -1601,6 +1618,7 @@ Error Song::readFromFile(Deserializer& reader) {
 	deluge::marbles::runner::resetToDefaults();
 	deluge::rungler::runner::resetToDefaults();
 	deluge::neurons::runner::resetToDefaults();
+	deluge::crossmod::runner::resetToDefaults();
 	deluge::euclid::evolver::reset();
 	deluge::voice::runner::resetToDefaults();
 	cvEngine.setMutedGates(0);
@@ -2189,6 +2207,29 @@ unknownTag:
 				}
 				reader.exitTag("marbles", true);
 				deluge::marbles::runner::loadSettings(marbles);
+			}
+
+			else if (!strcmp(tagName, "crossmod")) {
+				deluge::crossmod::runner::Settings cm;
+				reader.match('{');
+				while (*(tagName = reader.readNextTagOrAttributeName())) {
+					if (strlen(tagName) == 4 && tagName[3] >= '0' && tagName[3] < '0' + deluge::crossmod::kNumRoutes) {
+						int32_t i = tagName[3] - '0';
+						int32_t value = reader.readTagOrAttributeValueInt();
+						if (!strncmp(tagName, "src", 3)) {
+							cm.routes[i].source = static_cast<int8_t>(value - 1);
+						}
+						else if (!strncmp(tagName, "tgt", 3)) {
+							cm.routes[i].target = static_cast<int8_t>(value - 1);
+						}
+						else if (!strncmp(tagName, "dep", 3)) {
+							cm.routes[i].depth = static_cast<int8_t>(value - deluge::crossmod::kMaxDepthSteps);
+						}
+					}
+					reader.exitTag(tagName);
+				}
+				reader.exitTag("crossmod", true);
+				deluge::crossmod::runner::loadSettings(cm);
 			}
 
 			else if (!strcmp(tagName, "neurons")) {

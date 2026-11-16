@@ -24,6 +24,7 @@
 #include "gui/views/euclidean_view.h"
 #include "gui/views/instrument_clip_view.h"
 #include "gui/views/session_view.h"
+#include "gui/views/crossmod_view.h"
 #include "gui/views/marbles_view.h"
 #include "gui/views/neurons_view.h"
 #include "gui/views/rungler_view.h"
@@ -492,6 +493,23 @@ ActionResult EurorackView::buttonAction(deluge::hid::Button b, bool on, bool inC
 			openedFromHere_ = true;
 			changeRootUI(b == CV ? static_cast<UI*>(&chaosView)
 			                     : (b == KEYBOARD ? static_cast<UI*>(&turingView) : static_cast<UI*>(&voiceView)));
+		}
+		return ActionResult::DEALT_WITH;
+	}
+
+	// Pressing the select encoder opens the cross-modulation routes
+	if (b == SELECT_ENC) {
+		if (on) {
+			if (inCardRoutine) {
+				return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+			}
+			if (!getCurrentClip()) {
+				showNotice("Open a clip first");
+				return ActionResult::DEALT_WITH;
+			}
+			display->cancelPopup();
+			openedFromHere_ = true;
+			changeRootUI(&crossmodView);
 		}
 		return ActionResult::DEALT_WITH;
 	}
