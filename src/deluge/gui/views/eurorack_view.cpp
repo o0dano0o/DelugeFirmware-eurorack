@@ -41,7 +41,9 @@
 #include "hid/led/indicator_leds.h"
 #include "hid/led/pad_leds.h"
 #include "model/clip/clip.h"
+#include "model/scale/preset_scales.h"
 #include "model/song/song.h"
+#include "util/functions.h"
 #include "processing/engines/chaos_runner.h"
 #include "processing/engines/cv_engine.h"
 #include "processing/engines/billiards_runner.h"
@@ -623,6 +625,66 @@ ActionResult EurorackView::openOwnerOfRow(int32_t y) {
 	openedFromHere_ = true;
 	changeRootUI(&instrumentClipView);
 	instrumentClipView.openEuclidean();
+	return ActionResult::DEALT_WITH;
+}
+
+/// Says the song's key: the root note and (on 7-segment, scrolling) the scale
+void EurorackView::showKey() {
+	if (display->haveOLED()) {
+		currentSong->displayCurrentRootNoteAndScaleName();
+		return;
+	}
+	char text[48];
+	char noteName[5];
+	int32_t isNatural = 1;
+	noteCodeToString(currentSong->key.rootNote, noteName, &isNatural);
+	snprintf(text, sizeof(text), "%s %s", noteName, getScaleName(currentSong->getCurrentScale()));
+	display->setScrollingText(text);
+}
+
+ActionResult EurorackView::horizontalEncoderAction(int32_t offset) {
+	if (currentSong == nullptr) {
+		return ActionResult::DEALT_WITH;
+	}
+	int32_t root = mod(currentSong->key.rootNote + (offset > 0 ? 1 : -1), 12);
+	currentSong->setRootNote(root);
+	char text[8];
+	char noteName[5];
+	int32_t isNatural = 1;
+	noteCodeToString(currentSong->key.rootNote, noteName, &isNatural);
+	snprintf(text, sizeof(text), "%s", noteName);
+	if (display->haveOLED()) {
+		showKey();
+	}
+	else {
+		display->displayPopup(text); // 7-segment: just the note, so it can be turned quickly
+	}
+	return ActionResult::DEALT_WITH;
+}
+
+ActionResult EurorackView::verticalEncoderAction(int32_t offset, bool inCardRoutine) {
+	if (inCardRoutine) {
+		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;
+	}
+	if (currentSong == nullptr) {
+		return ActionResult::DEALT_WITH;
+	}
+	// Steps to the next (or previous) scale that fits the notes already in the song; the user scale comes last
+	int32_t dir = offset > 0 ? 1 : -1;
+	int32_t scale = currentSong->getCurrentScale();
+	if (scale >= NUM_PRESET_SCALES + 1) {
+		scale = dir > 0 ? -1 : NUM_PRESET_SCALES + 1; // a scale that isn't one of the presets: start from the end
+	}
+	for (int32_t tries = 0; tries <= NUM_PRESET_SCALES; tries++) {
+		scale = mod(scale + dir, NUM_PRESET_SCALES + 1);
+		if (scale != NUM_PRESET_SCALES && currentSong->disabledPresetScales[scale]) {
+			continue;
+		}
+		if (currentSong->setScale(static_cast<Scale>(scale)) != NO_SCALE) {
+			break;
+		}
+	}
+	showKey();
 	return ActionResult::DEALT_WITH;
 }
 

@@ -67,10 +67,14 @@ public:
 
 	ActionResult buttonAction(deluge::hid::Button b, bool on, bool inCardRoutine) override;
 	ActionResult padAction(int32_t x, int32_t y, int32_t velocity) override;
+	/// Upper black encoder: root note of the song key. Lower black encoder: scale. Both feed the CV quantisers.
+	ActionResult horizontalEncoderAction(int32_t offset) override;
+	ActionResult verticalEncoderAction(int32_t offset, bool inCardRoutine) override;
 
 private:
 	ActionResult openOwnerOfRow(int32_t y);
 	void showNotice(char const* text);
+	void showKey();
 	uint32_t lastSignature_ = 0xFFFFFFFF;
 	UI* returnTo_ = nullptr;
 	bool openedFromHere_ = false;
