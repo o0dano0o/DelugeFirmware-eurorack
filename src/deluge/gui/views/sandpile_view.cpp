@@ -49,7 +49,7 @@ namespace {
 
 constexpr int32_t kPopupMs = 800;
 constexpr int32_t kFlashMs = 120;
-constexpr int32_t kNumPages = 2;
+constexpr int32_t kNumPages = 3;
 constexpr float kMinRate = 0.25f;
 constexpr float kMaxRate = 20.0f;
 
@@ -58,8 +58,8 @@ const RGB kFlashColour{255, 255, 255};
 const RGB kRateColour{225, 185, 105};
 const RGB kGateColour{40, 160, 255};
 
-char const* const kPageNames[kNumPages] = {"Drop mode and topple speed", "Range and big size"};
-char const* const kPageNamesShort[kNumPages] = {"drP", "rnG"};
+char const* const kPageNames[kNumPages] = {"Drop mode and topple speed", "Range and big size", "CV meters"};
+char const* const kPageNamesShort[kNumPages] = {"drP", "rnG", "CUr"};
 
 RGB scaled(RGB c, int32_t pct) {
 	return c.transform([pct](uint8_t v) { return static_cast<uint8_t>(v * pct / 100); });
@@ -106,6 +106,7 @@ void SandpileView::focusRegained() {
 void SandpileView::graphicsRoutine() {
 	const SandpileEngine& e = runner::engine();
 	uint32_t signature = e.getTotalGrains();
+	signature = signature * 31 + static_cast<uint32_t>(e.getVolts(0) * 100.0f) + page_;
 	signature = signature * 31 + e.getTotalTopples();
 	signature = signature * 31 + e.getTotalDropped();
 	for (int32_t g = 0; g < kNumGates; g++) {
@@ -139,6 +140,21 @@ bool SandpileView::renderMainPads(uint32_t whichRows, RGB image[][kDisplayWidth 
 		}
 		if (occupancyMask) {
 			memset(occupancyMask[y], 64, kDisplayWidth);
+		}
+	}
+
+	// On the CV page the bottom two rows become meters: CV 1 (avalanche size) above CV 2 (fill)
+	if (page_ == 2) {
+		const float range = e.params().rangeVolts;
+		for (int32_t cv = 0; cv < kNumCV; cv++) {
+			int32_t y = 1 - cv;
+			if (!(whichRows & (1 << y))) {
+				continue;
+			}
+			int32_t lit = static_cast<int32_t>(std::min(1.0f, e.getVolts(cv) / range) * kDisplayWidth + 0.5f);
+			for (int32_t x = 0; x < kDisplayWidth; x++) {
+				image[y][x] = (x < lit) ? (cv == 0 ? RGB{255, 140, 40} : RGB{40, 220, 200}) : RGB::monochrome(6);
+			}
 		}
 	}
 
@@ -181,6 +197,10 @@ bool SandpileView::renderSidebar(uint32_t whichRows, RGB image[][kDisplayWidth +
 void SandpileView::pageValueText(int32_t knob, char* out, size_t size) const {
 	const Params& p = runner::engine().params();
 	bool oled = display->haveOLED();
+	if (page_ == 2) {
+		snprintf(out, size, "%s", oled ? "CV meters on the bottom rows" : "CUr");
+		return;
+	}
 	if (page_ == 0) {
 		if (knob == 0) {
 			bool centre = p.dropMode == DropMode::CENTRE;
