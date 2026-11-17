@@ -637,7 +637,7 @@ void EurorackView::showKey() {
 	char text[48];
 	char noteName[5];
 	int32_t isNatural = 1;
-	noteCodeToString(currentSong->key.rootNote, noteName, &isNatural);
+	noteCodeToString(currentSong->key.rootNote, noteName, &isNatural, false);
 	snprintf(text, sizeof(text), "%s %s", noteName, getScaleName(currentSong->getCurrentScale()));
 	display->setScrollingText(text);
 }
@@ -651,7 +651,7 @@ ActionResult EurorackView::horizontalEncoderAction(int32_t offset) {
 	char text[8];
 	char noteName[5];
 	int32_t isNatural = 1;
-	noteCodeToString(currentSong->key.rootNote, noteName, &isNatural);
+	noteCodeToString(currentSong->key.rootNote, noteName, &isNatural, false);
 	snprintf(text, sizeof(text), "%s", noteName);
 	if (display->haveOLED()) {
 		showKey();
