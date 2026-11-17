@@ -289,3 +289,24 @@ TEST(Sandpile, toppledCellsFlashForAMoment) {
 	}
 	CHECK(flashed);
 }
+
+TEST(Sandpile, fillCvMovesWithEveryDropAndSlide) {
+	SandpileEngine e;
+	e.setRange(10.0f);
+	float before = e.getVolts(1);
+	CHECK(before > 1.0f && before < 9.0f); // the starting pile sits inside the scale, not at either end
+	e.addGrain(0, 0);
+	float after = e.getVolts(1);
+	DOUBLES_EQUAL(10.0 / kNumCells, after - before, 0.001); // one grain is 1/128 of a grain per cell
+	// over a minute it wanders by a good fraction of a volt
+	float lo = after;
+	float hi = after;
+	e.setDropRate(5.0f);
+	for (int i = 0; i < 30000; i++) {
+		e.step(kDt, 120.0f);
+		float v = e.getVolts(1);
+		lo = v < lo ? v : lo;
+		hi = v > hi ? v : hi;
+	}
+	CHECK(hi - lo > 0.5f);
+}

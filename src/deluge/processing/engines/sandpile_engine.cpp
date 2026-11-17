@@ -293,8 +293,10 @@ float SandpileEngine::getVolts(int32_t cv) const {
 		return clamp(norm, 0.0f, 1.0f) * params_.rangeVolts;
 	}
 	if (cv == 1) {
-		float fill = static_cast<float>(getTotalGrains()) / static_cast<float>(kNumCells * (kLimit - 1));
-		return clamp(fill, 0.0f, 1.0f) * params_.rangeVolts;
+		// Grains per cell from 1.5 (0 V) to 2.5 (full range). A settled pile sits near 2, so one grain or a lost slide
+		// moves this by a visible amount; a straight 0 to 3 scale would barely twitch.
+		float avg = static_cast<float>(getTotalGrains()) / static_cast<float>(kNumCells);
+		return clamp(avg - 1.5f, 0.0f, 1.0f) * params_.rangeVolts;
 	}
 	return 0.0f;
 }
