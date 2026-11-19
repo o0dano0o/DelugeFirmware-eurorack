@@ -286,7 +286,9 @@ void CVEngine::sendOwnedGate(deluge::owners::Owner owner, uint8_t channel, bool 
 		return;
 	}
 	if (high) {
-		switchGateOn(channel, true);
+		// Not "instantly": the instant path leaves a gate-on that arrives soon after a gate-off waiting in
+		// asapGateOutputPending, which only services gates 3 and 4, so gates 1 and 2 never went high
+		switchGateOn(channel);
 	}
 	else {
 		switchGateOff(channel);
