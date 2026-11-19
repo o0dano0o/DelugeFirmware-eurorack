@@ -51,6 +51,12 @@ uint32_t stepCount = 0;
 uint32_t lastStepTimer = 0;
 bool gateHigh = false;
 uint32_t gateOffAt = 0;
+/// A step that arrives while the previous gate is still high drops it and raises the new gate a moment later, so
+/// the receiving module always sees a rising edge
+bool pendingGate = false;
+uint32_t pendingGateAt = 0;
+int32_t pendingGateSamples = 0;
+constexpr int32_t kRetriggerGapSamples = 2 * 44; ///< 2 ms low between two gates
 bool haveLastStep = false;
 uint8_t history[kHistoryLength] = {};
 bool historyRest[kHistoryLength] = {};
@@ -156,6 +162,14 @@ void doStep() {
 	lastStepTimer = now;
 
 	outputCurrentNote();
+	if (gateHigh) {
+		releaseGate();
+		pendingGate = true;
+		pendingGateAt = now + kRetriggerGapSamples;
+		pendingGateSamples = std::min(gateSamples, std::max(kMinGateSamples, kRetriggerGapSamples * 4));
+		return;
+	}
+	pendingGate = false;
 	cvEngine.sendOwnedGate(Owner::TURING, settings.channel, true);
 	gateHigh = true;
 	gateOffAt = now + gateSamples;
@@ -216,6 +230,7 @@ void setChannel(int32_t channel) {
 	if (wanted == settings.channel) {
 		return;
 	}
+	pendingGate = false;
 	releaseGate();
 	settings.channel = wanted;
 	claimChannel();
@@ -356,6 +371,14 @@ void playbackBegun() {
 void tick() {
 	if (settings.channel < 0) {
 		return;
+	}
+
+	// a gate waiting out its gap after an overlapping step
+	if (pendingGate && static_cast<int32_t>(AudioEngine::audioSampleTimer - pendingGateAt) >= 0) {
+		pendingGate = false;
+		cvEngine.sendOwnedGate(Owner::TURING, settings.channel, true);
+		gateHigh = true;
+		gateOffAt = AudioEngine::audioSampleTimer + pendingGateSamples;
 	}
 
 	// end of the gate
